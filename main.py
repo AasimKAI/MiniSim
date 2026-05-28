@@ -49,9 +49,9 @@ class CryptoSignalSystem:
 
         # Layer A: Data & Edge Validation
         from collector.collector import Collector
-        from collector.filter import Filter
+        from collector.filter import DataFilter
         self.collector = Collector(self.config)
-        self.filter = Filter(self.config)
+        self.filter = DataFilter(self.config)
 
         # Layer B: Analysis & Regime Detection
         from analysts.technical_analyst import TechnicalAnalyst
@@ -200,7 +200,7 @@ class CryptoSignalSystem:
             return
 
         # Layer A: Filter
-        clean_data = self.filter.filter_data(raw_data)
+        clean_data = self.filter.filter_and_clean(raw_data)
         if not clean_data:
             logger.error("Filtering failed")
             return

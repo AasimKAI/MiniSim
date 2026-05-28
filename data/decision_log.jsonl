@@ -1,13 +1,13 @@
 [
   {
-    "log_id": "c2eeb1b0-ff57-4403-a96c-120140d5f829",
+    "log_id": "52c63032-51e0-4ca9-918d-05e466fe2685",
     "signal_id": "sig_123",
     "status": "proposed",
     "coin": "BTC",
     "decision": "entry_buy",
     "view": "bullish",
     "confidence": 0.8,
-    "timestamp": "2026-05-28T19:56:57.123913+00:00",
+    "timestamp": "2026-05-28T20:01:37.387877+00:00",
     "reason": "signal generated: bullish with 80.0% confidence"
   }
 ]
