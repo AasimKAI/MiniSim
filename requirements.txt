@@ -1,0 +1,36 @@
+# Crypto Signal System v2 - Dependencies
+
+# API & HTTP
+requests>=2.28.0
+urllib3>=1.26.0
+
+# Data & Analytics
+numpy>=1.23.0
+pandas>=1.5.0
+
+# Binance Integration
+python-binance>=1.0.17
+
+# LLM & NLP
+ollama>=0.1.0
+
+# Notifications
+python-telegram-bot>=20.0
+
+# Utilities
+python-dotenv>=0.21.0
+pyyaml>=6.0
+dateparser>=1.1.0
+
+# Development & Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# Optional: PostgreSQL support (if using DB)
+# psycopg2-binary>=2.9.0
+
+# Optional: Redis support (if using cache)
+# redis>=4.5.0

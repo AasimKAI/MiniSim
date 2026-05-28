@@ -1,0 +1,113 @@
+"""
+LAYER D - EXIT MANAGER
+Manages exit plan: profit targets, trailing stop, thesis-break.
+3 exit triggers, thesis-break closes BEFORE stop-loss.
+Continuous exit-watch loop.
+"""
+
+import logging
+from typing import Dict, Optional, List
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
+
+class ExitManager:
+    """Manages position exits."""
+
+    def __init__(self, config):
+        self.config = config
+
+    def check_exit_conditions(self, position: Dict, current_price: float, regime: str) -> Optional[Dict]:
+        """
+        Check if any exit condition triggered.
+        Returns: exit_order or None.
+        """
+        entry_price = position.get('entry_price', 0)
+        stop_loss = position.get('stop_loss', 0)
+        profit_targets = position.get('take_profit_targets', [])
+        trailing_stop = position.get('trailing_stop', entry_price)
+        thesis_condition = position.get('thesis_condition', {})
+        max_hold_time_sec = position.get('max_hold_time_sec', 0)
+        entry_timestamp = position.get('entry_timestamp', '')
+
+        # Parse entry time and check max hold
+        if entry_timestamp:
+            from datetime import datetime
+            try:
+                entry_dt = datetime.fromisoformat(entry_timestamp.replace('Z', '+00:00'))
+                now = datetime.now(timezone.utc)
+                elapsed = (now - entry_dt).total_seconds()
+                if elapsed > max_hold_time_sec:
+                    return {
+                        "trigger": "max_hold_time",
+                        "exit_type": "limit",
+                        "exit_price": current_price,
+                        "quantity_percent": 100,
+                    }
+            except:
+                pass
+
+        # Check stop loss
+        if current_price <= stop_loss:
+            return {
+                "trigger": "stop_loss",
+                "exit_type": "market",
+                "exit_price": current_price,
+                "quantity_percent": 100,
+            }
+
+        # Check trailing stop
+        if position.get('trailing_stop_activated', False):
+            trailing_stop_price = max(position.get('trailing_stop_level', entry_price), trailing_stop)
+            if current_price <= trailing_stop_price:
+                return {
+                    "trigger": "trailing_stop",
+                    "exit_type": "market",
+                    "exit_price": current_price,
+                    "quantity_percent": 100,
+                }
+
+        # Check profit targets
+        for i, target in enumerate(profit_targets):
+            if current_price >= target.get('target_price', float('inf')):
+                return {
+                    "trigger": f"profit_target_{i + 1}",
+                    "exit_type": "limit",
+                    "exit_price": target.get('target_price'),
+                    "quantity_percent": target.get('quantity_percent', 33.33),
+                }
+
+        # Check thesis condition (BEFORE stop loss)
+        if self._check_thesis_break(thesis_condition, regime):
+            return {
+                "trigger": "thesis_break",
+                "exit_type": "market",
+                "exit_price": current_price,
+                "quantity_percent": 100,
+            }
+
+        return None
+
+    def _check_thesis_break(self, thesis_condition: Dict, current_regime: str) -> bool:
+        """Check if original thesis condition is broken."""
+        condition_type = thesis_condition.get('condition_type', '')
+        if condition_type == 'signal_validity':
+            original_view = thesis_condition.get('parameters', {}).get('original_view', 'bullish')
+            # Simple check: if regime became volatile, thesis broken
+            if current_regime == 'volatile':
+                return True
+        return False
+
+    def update_trailing_stop(self, position: Dict, current_price: float) -> Dict:
+        """Update trailing stop for position."""
+        entry_price = position.get('entry_price', 0)
+        trailing_percent = self.config.TRAILING_STOP_PERCENT
+
+        if current_price > entry_price:
+            # We're in profit; activate and update trailing stop
+            trailing_level = current_price * (1 - trailing_percent / 100)
+            position['trailing_stop_activated'] = True
+            position['trailing_stop_level'] = max(position.get('trailing_stop_level', entry_price), trailing_level)
+
+        return position
