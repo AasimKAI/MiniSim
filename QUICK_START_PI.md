@@ -121,7 +121,7 @@ sudo journalctl -u crypto-signal -f
 ```bash
 # 1. All tests pass?
 python3 tests/run_tests.py
-# → Expected: 23 passed, 0 failed
+# → Expected: 32 passed, 0 failed
 
 # 2. Config valid?
 python3 -c "from config.config import *; print(f'Mode: {MODE}')"

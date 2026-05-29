@@ -56,6 +56,23 @@ class DecisionLog:
         self._append(entry)
         return log_id
 
+    def log_pending_approval(self, signal: Dict, approval_id: str, expires_at: str = "") -> str:
+        """Log signal awaiting external approval."""
+        log_id = str(uuid.uuid4())
+        entry = {
+            "log_id": log_id,
+            "signal_id": signal.get('signal_id', ''),
+            "status": "pending_approval",
+            "coin": signal.get('coin', ''),
+            "decision": signal.get('decision', ''),
+            "view": signal.get('view', ''),
+            "confidence": signal.get('confidence', 0),
+            "timestamp": self._now_iso(),
+            "reason": f"awaiting approval {approval_id} until {expires_at}",
+        }
+        self._append(entry)
+        return log_id
+
     def log_executed(self, signal: Dict, order_id: str, filled_price: float) -> str:
         """Log executed trade."""
         log_id = str(uuid.uuid4())

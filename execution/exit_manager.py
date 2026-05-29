@@ -85,6 +85,10 @@ class ExitManager:
 
         # Check profit targets
         for i, target in enumerate(profit_targets):
+            trigger = f"profit_target_{i + 1}"
+            if trigger in position.get('closed_exit_triggers', []):
+                continue
+
             if isinstance(target, dict):
                 target_price = target.get('target_price')
                 quantity_percent = target.get('quantity_percent', 33.33)
@@ -98,7 +102,7 @@ class ExitManager:
             target_hit = current_price >= target_price if side == 'LONG' else current_price <= target_price
             if target_hit:
                 return {
-                    "trigger": f"profit_target_{i + 1}",
+                    "trigger": trigger,
                     "exit_type": "limit",
                     "exit_price": target_price,
                     "quantity_percent": quantity_percent,

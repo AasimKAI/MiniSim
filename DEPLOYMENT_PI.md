@@ -300,7 +300,7 @@ python3 tests/run_tests.py
 ======================================================================
 CRYPTO SIGNAL SYSTEM V3 - TEST SUITE
 ======================================================================
-RESULTS: 23 passed, 0 failed
+RESULTS: 32 passed, 0 failed
 ======================================================================
 ```
 
@@ -570,7 +570,7 @@ Before declaring deployment complete, verify:
 - ✅ Binance Testnet orders executing successfully
 - ✅ Tax ledger recording trades correctly
 - ✅ Telegram approvals working (if enabled)
-- ✅ Dashboard accessible on localhost:8000
+- ⚠️ Dashboard implementation is not included yet; monitor logs and JSONL records
 
 ### 48+ Hour Stability Test
 - ✅ System runs unattended for 48+ hours

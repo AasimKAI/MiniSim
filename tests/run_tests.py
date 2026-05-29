@@ -366,6 +366,30 @@ def test_risk_manager_kill_switch():
     assert_false(approved)
 
 
+@test("Risk Manager: veto short entries when venue disallows shorts")
+def test_risk_manager_veto_short_disabled():
+    class Config:
+        POSITION_SIZE_USD = 100
+        MAX_EXPOSURE_USD = 500
+        LEVERAGE = 1
+        ALLOW_SHORTS = False
+        STOP_LOSS_PERCENT = 2.0
+        TAKE_PROFIT_TARGET_1_PERCENT = 5.0
+        TAKE_PROFIT_TARGET_2_PERCENT = 10.0
+        TAKE_PROFIT_TARGET_3_PERCENT = 15.0
+        TRAILING_STOP_PERCENT = 3.0
+        MAX_HOLD_TIME_HOURS = 48
+
+    from execution.risk_manager import RiskManager
+
+    rm = RiskManager(Config())
+    signal = {"decision": "entry_sell"}
+
+    approved, reason, size = rm.check_signal(signal, current_exposure_usd=0, is_kill_switch_active=False)
+    assert_false(approved)
+    assert_true("short" in reason)
+
+
 # ============================================================================
 # EXIT MANAGER TESTS
 # ============================================================================
@@ -510,6 +534,31 @@ def test_decision_log():
         assert_equal(entries[0]["status"], "proposed")
 
 
+@test("Decision Log: log pending approval")
+def test_decision_log_pending_approval():
+    from records.decision_log import DecisionLog
+    import tempfile
+    import os
+
+    class Config:
+        pass
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_file = os.path.join(tmpdir, "decision_log.jsonl")
+        dl = DecisionLog(Config(), log_file=log_file)
+        signal = {
+            "signal_id": "sig_123",
+            "coin": "BTC",
+            "decision": "entry_buy",
+            "view": "bullish",
+            "confidence": 0.8,
+        }
+
+        log_id = dl.log_pending_approval(signal, "approval_123", "tomorrow")
+        assert_true(log_id)
+        assert_equal(dl.get_all()[0]["status"], "pending_approval")
+
+
 # ============================================================================
 # TAX LEDGER TESTS
 # ============================================================================
@@ -588,6 +637,18 @@ def test_order_executor_entry():
     assert_greater(order["quantity"], 0)
 
 
+@test("Exchange Client: paper adapter stores and retrieves orders")
+def test_paper_exchange_client():
+    from execution.exchange_client import PaperExchangeClient
+
+    client = PaperExchangeClient()
+    order = client.execute("BTCUSDT", "BUY", 0.1, 50000, "sig_123/entry")
+    retrieved = client.get_order("BTCUSDT", "sig_123/entry")
+
+    assert_equal(order["status"], "filled")
+    assert_equal(retrieved["client_order_id"], "sig_123/entry")
+
+
 @test("Order Executor: real exit failure is not mocked as filled")
 def test_order_executor_exit_failure_raises():
     class Config:
@@ -617,6 +678,28 @@ def test_order_executor_exit_failure_raises():
     raise AssertionError("exit failure should propagate instead of creating a mock fill")
 
 
+@test("Order Executor: full exit uses remaining quantity")
+def test_order_executor_exit_uses_remaining_quantity():
+    class Config:
+        BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+        TAKER_FEE_PERCENT = 0.1
+
+    from execution.order_executor import OrderExecutor
+
+    oe = OrderExecutor(Config())
+    position = {
+        "signal_id": "sig_123",
+        "coin": "BTC",
+        "side": "LONG",
+        "entry_quantity": 0.3,
+        "remaining_quantity": 0.1,
+    }
+    exit_condition = {"trigger": "stop_loss", "quantity_percent": 100}
+
+    order = oe.execute_exit_order(position, exit_condition, current_price=49000)
+    assert_equal(order["quantity"], 0.1)
+
+
 @test("Telegram Approver: only big trades require approval")
 def test_telegram_approver_only_big_trades():
     class Config:
@@ -634,6 +717,44 @@ def test_telegram_approver_only_big_trades():
 
     assert_equal(small["approval_id"], "auto")
     assert_true(big["approval_id"] != "auto")
+
+
+@test("Position Store: persists and restores positions")
+def test_position_store_round_trip():
+    import os
+    import tempfile
+    from operations.position_store import PositionStore
+
+    class Config:
+        STATE_DIR = "state"
+        ATOMIC_WRITE_FSYNC = True
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = PositionStore(Config(), state_file=os.path.join(tmpdir, "positions.json"))
+        positions = {"pos_1": {"coin": "BTC", "status": "open"}}
+        assert_true(store.save(positions, 100.0))
+
+        loaded_positions, loaded_exposure = store.load()
+        assert_equal(loaded_positions["pos_1"]["coin"], "BTC")
+        assert_equal(loaded_exposure, 100.0)
+
+
+@test("State Reconciler: fails when local position missing on exchange")
+def test_reconciler_missing_exchange_position_fails():
+    class Config:
+        MODE = "testnet"
+
+    class EmptyExchange:
+        def get_open_positions(self):
+            return []
+
+    from operations.state_reconciler import StateReconciler
+
+    reconciler = StateReconciler(Config(), EmptyExchange())
+    success, message = reconciler.reconcile_on_startup([{"coin": "BTC"}])
+
+    assert_false(success)
+    assert_true("not present" in message or "not found" in message)
 
 
 # ============================================================================
@@ -736,11 +857,14 @@ def run_all_tests():
     test_risk_manager_approve()
     test_risk_manager_veto_exposure()
     test_risk_manager_kill_switch()
+    test_risk_manager_veto_short_disabled()
     test_exit_stop_loss()
     test_exit_profit_target()
     test_exit_short_directions()
     test_order_executor_entry()
+    test_paper_exchange_client()
     test_order_executor_exit_failure_raises()
+    test_order_executor_exit_uses_remaining_quantity()
     test_telegram_approver_only_big_trades()
     print()
 
@@ -748,6 +872,8 @@ def run_all_tests():
     print("Operations:")
     test_kill_switch()
     test_heartbeat()
+    test_position_store_round_trip()
+    test_reconciler_missing_exchange_position_fails()
     print()
 
     # Run decision tests
@@ -759,6 +885,7 @@ def run_all_tests():
     # Run records tests
     print("Records:")
     test_decision_log()
+    test_decision_log_pending_approval()
     test_tax_ledger()
     test_reflection_analysis()
     print()

@@ -13,6 +13,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
+import requests
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -133,10 +135,13 @@ class CryptoSignalSystem:
         from execution.exit_manager import ExitManager
         from execution.order_executor import OrderExecutor
         from execution.telegram_approver import TelegramApprover
+        from execution.exchange_client import BinanceSpotTestnetClient, PaperExchangeClient
+
+        self.exchange_client = self._create_exchange_client(BinanceSpotTestnetClient, PaperExchangeClient)
 
         self.risk_manager = RiskManager(self.config)
         self.exit_manager = ExitManager(self.config)
-        self.order_executor = OrderExecutor(self.config)
+        self.order_executor = OrderExecutor(self.config, self.exchange_client)
         self.telegram_approver = TelegramApprover(self.config)
 
         # Layer E: Operations & Resilience
@@ -144,11 +149,13 @@ class CryptoSignalSystem:
         from operations.state_reconciler import StateReconciler
         from operations.heartbeat import Heartbeat
         from operations.kill_switch import KillSwitch
+        from operations.position_store import PositionStore
 
         self.watchdog = Watchdog(self.config)
-        self.state_reconciler = StateReconciler(self.config)
+        self.state_reconciler = StateReconciler(self.config, self.exchange_client)
         self.heartbeat = Heartbeat(self.config)
         self.kill_switch = KillSwitch(self.config)
+        self.position_store = PositionStore(self.config)
 
         # Layer F: Records & Guarded Learning
         from records.decision_log import DecisionLog
@@ -160,13 +167,20 @@ class CryptoSignalSystem:
         self.reflection_agent = ReflectionAgent(self.config)
 
         # State
-        self.positions = {}  # position_id -> position
+        self.positions, self.current_exposure_usd = self.position_store.load()
         self.positions_lock = threading.RLock()  # Protect concurrent access to positions
-        self.current_exposure_usd = 0.0
         self.latest_prices = {}
         self.latest_regimes = {}
 
         logger.info("All layers initialized successfully")
+
+    def _create_exchange_client(self, binance_client_cls, paper_client_cls):
+        """Create the mode-specific exchange adapter."""
+        if self.mode == "testnet":
+            return binance_client_cls(self.config)
+        if self.mode in ["fixture", "historical_replay", "paper"]:
+            return paper_client_cls()
+        raise ValueError(f"Unsupported mode: {self.mode}")
 
     def start(self):
         """Start system."""
@@ -359,7 +373,7 @@ class CryptoSignalSystem:
         approval_id = approval.get('approval_id', 'auto')
         if approval_id != "auto":
             logger.warning(f"  Trade requires Telegram approval before execution (approval_id: {approval_id})")
-            self.decision_log.log_vetoed(signal, f"awaiting Telegram approval: {approval_id}")
+            self.decision_log.log_pending_approval(signal, approval_id, approval.get('expires_at', ''))
             return
 
         # Layer D: Execution
@@ -385,10 +399,13 @@ class CryptoSignalSystem:
             "side": "LONG" if signal.get('decision') == 'entry_buy' else "SHORT",
             "entry_price": current_price,
             "entry_quantity": order.get('filled_quantity', 0),
+            "remaining_quantity": order.get('filled_quantity', 0),
             "entry_timestamp": datetime.now(timezone.utc).isoformat(),
             "position_size_usd": position_size,
+            "remaining_exposure_usd": position_size,
             "stop_loss": exit_plan["stop_loss"],
             "take_profit_targets": exit_plan["profit_targets"],
+            "closed_exit_triggers": [],
             "trailing_stop_activated": False,
             "trailing_stop": current_price,
             "thesis_condition": exit_plan["thesis_condition"],
@@ -399,6 +416,7 @@ class CryptoSignalSystem:
         with self.positions_lock:
             self.positions[position.get('position_id')] = position
             self.current_exposure_usd += position_size
+            self.position_store.save(self.positions, self.current_exposure_usd)
 
         logger.info(f"  Position opened: {position.get('position_id')}")
 
@@ -416,7 +434,7 @@ class CryptoSignalSystem:
             if position.get('status') != 'open':
                 continue
 
-            current_price = self.latest_prices.get(position.get('coin'))
+            current_price = self._get_fresh_price(position.get('coin')) or self.latest_prices.get(position.get('coin'))
             if not current_price:
                 logger.debug(f"No live price for exit check on {position.get('coin')}")
                 continue
@@ -445,11 +463,27 @@ class CryptoSignalSystem:
                 # Update position (with lock)
                 with self.positions_lock:
                     if position_id in self.positions:
-                        self.positions[position_id]['status'] = 'closed'
-                        self.current_exposure_usd = max(
+                        stored_position = self.positions[position_id]
+                        filled_quantity = exit_exec.get('filled_quantity', 0)
+                        remaining_quantity = max(
                             0.0,
-                            self.current_exposure_usd - position.get('position_size_usd', 0)
+                            stored_position.get('remaining_quantity', stored_position.get('entry_quantity', 0)) - filled_quantity
                         )
+                        entry_quantity = stored_position.get('entry_quantity', 0) or 1
+                        exposure_reduction = stored_position.get('position_size_usd', 0) * min(
+                            1.0,
+                            filled_quantity / entry_quantity
+                        )
+                        stored_position['remaining_quantity'] = remaining_quantity
+                        stored_position['remaining_exposure_usd'] = max(
+                            0.0,
+                            stored_position.get('remaining_exposure_usd', stored_position.get('position_size_usd', 0)) - exposure_reduction
+                        )
+                        stored_position.setdefault('closed_exit_triggers', []).append(exit_order.get('trigger'))
+                        if remaining_quantity <= 0 or exit_order.get('quantity_percent', 100) >= 100:
+                            stored_position['status'] = 'closed'
+                        self.current_exposure_usd = max(0.0, self.current_exposure_usd - exposure_reduction)
+                        self.position_store.save(self.positions, self.current_exposure_usd)
 
                 self.decision_log.log_exited(
                     {"signal_id": position.get('signal_id'), "coin": position.get('coin')},
@@ -482,6 +516,25 @@ class CryptoSignalSystem:
             if score < 0.4:
                 return "negative"
             return "neutral"
+        return None
+
+    def _get_fresh_price(self, coin: str) -> Optional[float]:
+        if not coin:
+            return None
+        try:
+            symbol = getattr(self.config, "BINANCE_SPOT_SYMBOL_FORMAT", "{}USDT").format(coin)
+            response = requests.get(
+                f"{self.config.BINANCE_MARKET_DATA_BASE_URL.rstrip('/')}/api/v3/ticker/price",
+                params={"symbol": symbol},
+                timeout=5,
+            )
+            response.raise_for_status()
+            price = float(response.json().get("price", 0))
+            if price > 0:
+                self.latest_prices[coin] = price
+                return price
+        except Exception as e:
+            logger.warning(f"Fresh price lookup failed for {coin}: {e}")
         return None
 
     def _signal_handler(self, signum, frame):

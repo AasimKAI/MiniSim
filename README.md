@@ -1,10 +1,10 @@
 # Crypto Signal System v3
 
-Production-ready cryptocurrency trading signal system with 6 layers, 200+ tests, and comprehensive risk management.
+Cryptocurrency trading signal system with 6 layers, explicit paper/testnet adapters, persistent position state, and safety-first risk controls.
 
 ## Overview
 
-**Status:** Complete implementation, testnet-only, safe modes available.
+**Status:** v3 safety hardening in progress. Paper mode is self-contained; testnet mode requires real Binance Testnet credentials and will not silently fall back to mock execution.
 
 The system consists of 6 integrated layers:
 
@@ -22,12 +22,12 @@ The system consists of 6 integrated layers:
 - **LLM-powered decision making:** Local Ollama (sentiment, Bull/Bear research, CEO)
 - **Comprehensive risk management:** Position sizing, exposure caps, kill switch
 - **Exit sophistication:** Profit targets, trailing stops, thesis-break detection
-- **Testnet-only operation:** Binance Testnet integration
+- **Explicit execution modes:** Paper mode uses a paper adapter; testnet mode requires Binance Testnet credentials
 - **Staged modes:** fixture, historical_replay, paper, testnet
 - **Full audit trail:** Decision log, tax ledger (GBP), position snapshots
 - **Schema validation:** All records validated at boundaries
 - **Resilience:** State reconciliation, watchdog monitoring, atomic writes
-- **200+ tests:** All acceptance criteria verified
+- **32 tests:** Core unit and safety-boundary checks
 
 ## Installation
 
@@ -129,17 +129,11 @@ MODE = "historical_replay"
 python tests/run_tests.py
 ```
 
-Expected: 50+ tests pass, zero failures.
+Expected: 32 tests pass, zero failures.
 
 ### Dashboard
 
-View live signals (localhost-only by default):
-
-```bash
-# Built-in dashboard at localhost:8000
-# Enable LAN access (requires auth):
-DASHBOARD_LAN_MODE = True
-```
+Dashboard settings are present in config, but the dashboard implementation is not included yet. Use logs, `data/decision_log.jsonl`, `data/tax_ledger.jsonl`, and `state/positions.json` for monitoring.
 
 ## Architecture
 
@@ -169,7 +163,8 @@ crypto-system/
   execution/           # Layer D: Execution & Exit
     risk_manager.py         # Position sizing, exposure
     exit_manager.py         # Profit targets, stops, thesis-break
-    order_executor.py       # Binance Testnet execution
+    exchange_client.py      # Paper and Binance Spot Testnet adapters
+    order_executor.py       # Mode-specific order execution
     telegram_approver.py    # Big trade approval
   operations/          # Layer E: Operations
     watchdog.py             # Component monitoring
@@ -182,7 +177,7 @@ crypto-system/
     reflection_agent.py     # Post-trade learning
   schemas/             # Record validators
     validators.py           # All schema validators
-  tests/               # 50+ tests
+  tests/               # Safety and unit tests
     run_tests.py            # Test runner
   data/                # Data files
     latest_raw_data.json
@@ -223,7 +218,7 @@ crypto-system/
 
 Checks every 10 seconds:
 
-1. **Profit Targets** (3 levels): Exit fraction at target prices
+1. **Profit Targets** (3 levels): Exit fraction at target prices and keep the remaining position open
 2. **Trailing Stop:** Lock in gains (only if in profit)
 3. **Thesis Break:** Original reason for trade failed (regime change)
 4. **Stop Loss:** Predefined loss limit
@@ -281,11 +276,12 @@ All LLM calls have:
 
 ### Approval Workflow
 
-Big trades (> $1000) require Telegram approval:
+Big trades (> $1000) are held as pending approval:
 - Chat ID must match config (single chat only)
 - Approval expires after 5 minutes
 - Nonce prevents reuse
 - Expired/mismatched rejected + logged
+- A Telegram receive loop is still required before pending approvals can be accepted asynchronously
 
 ## Risk Management
 
@@ -331,7 +327,7 @@ Low confidence signals stand down (default safe).
 
 The following are **NOT** tested in this build and require verification on deployment:
 
-1. **Live Binance API Performance:** System tested with mock orders and testnet. Real exchange latency/order book depth untested.
+1. **Live Binance API Performance:** Testnet mode uses signed Binance Spot Testnet calls, but real latency, symbol filters, and order sizing need target-environment verification.
 2. **Ollama Inference Speed:** LLM timeouts set to 30s. Actual inference time depends on hardware. **Test on target Raspberry Pi.**
 3. **Raspberry Pi Performance:** Full 6-layer cycle time unknown on Pi. Monitor real execution times.
 4. **Real Data Quality:** System designed for clean feeds. Real API failures, rate limits, outages not exhaustively tested.
@@ -372,7 +368,7 @@ Schema Validators:
 ...
 
 ======================================================================
-RESULTS: 50 passed, 0 failed
+RESULTS: 32 passed, 0 failed
 ======================================================================
 ```
 
@@ -456,10 +452,7 @@ cat data/tax_ledger.jsonl | jq -s 'group_by(.coin) | map({coin: .[0].coin, trade
 
 ### Dashboard
 
-```bash
-# Open browser to http://localhost:8000
-# Shows: signals, positions, decisions, health
-```
+The dashboard is a planned surface, not an implemented server in this repository yet.
 
 ## Troubleshooting
 
@@ -561,6 +554,6 @@ For issues:
 ## Version
 
 Crypto Signal System v3.0.0 (May 2026)
-- Complete: 6 layers, 50+ tests, testnet-only
-- Production-ready: Schema validation, atomic writes, kill switch
+- Complete: 6 layers, 32 tests, explicit paper/testnet adapters
+- Safer: Schema validation, persistent position state, kill switch
 - Safe: Reconciliation, role-based approvals, honest documentation

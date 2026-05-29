@@ -85,6 +85,7 @@ REGIME_FILTER_STRICT = False  # if True, only trade in trending regime
 POSITION_SIZE_USD = 100
 MAX_EXPOSURE_USD = 500  # max concurrent open trades USD
 LEVERAGE = 1  # no leverage in testnet
+ALLOW_SHORTS = False  # Binance Spot Testnet cannot open short positions
 STOP_LOSS_PERCENT = 2.0
 TAKE_PROFIT_TARGET_1_PERCENT = 5.0
 TAKE_PROFIT_TARGET_2_PERCENT = 10.0

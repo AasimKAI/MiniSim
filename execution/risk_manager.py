@@ -32,6 +32,9 @@ class RiskManager:
         if signal.get('decision') == 'stand_down':
             return False, "signal is stand down", None
 
+        if signal.get('decision') == 'entry_sell' and not getattr(self.config, 'ALLOW_SHORTS', False):
+            return False, "short entries are disabled for this execution venue", None
+
         # Check exposure
         remaining_capacity = self.max_exposure_usd - current_exposure_usd
         if remaining_capacity <= 0:

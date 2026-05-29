@@ -68,7 +68,7 @@ git clone https://[username]:[PAT]@github.com/AasimKAI/OLC.git
 ### Branches
 
 ```
-main                          ← Stable, production-ready
+main                          ← Stable integration branch
 ├── claude/new-session-*      ← Development branches (current work)
 ├── feature/*                 ← New features
 └── bugfix/*                  ← Bug fixes
@@ -167,7 +167,7 @@ python3 tests/run_tests.py
 
 # Expected output:
 # ======================================================================
-# RESULTS: 23 passed, 0 failed
+# RESULTS: 32 passed, 0 failed
 # ======================================================================
 ```
 

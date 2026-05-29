@@ -29,7 +29,8 @@ class StateReconciler:
         logger.info("Starting state reconciliation...")
 
         if not self.binance_client:
-            # Mock reconciliation for testing
+            if getattr(self.config, "MODE", "") == "testnet":
+                return False, "testnet reconciliation requires an exchange client"
             self.reconciliation_complete = True
             self.last_reconciliation = datetime.now(timezone.utc)
             logger.info("Reconciliation complete (mock)")
@@ -64,28 +65,33 @@ class StateReconciler:
             logger.error(f"CRITICAL: Local has {len(local)} positions but exchange is empty!")
             logger.error("This indicates orphaned positions that were closed externally.")
             logger.error("Positions will NOT be reopened. Manual verification required.")
-            # Return empty to prevent system from reopening orphaned positions
-            return []
+            raise ValueError("local positions are not present on exchange")
 
-        # Create lookup by order ID
-        exchange_lookup = {p.get('order_id'): p for p in exchange}
+        # Create lookup by order ID when available, otherwise by coin for spot balances.
+        exchange_lookup = {
+            p.get('order_id') or p.get('coin'): p
+            for p in exchange
+            if p.get('order_id') or p.get('coin')
+        }
 
         for local_pos in local:
-            order_id = local_pos.get('order_id')
-            if order_id in exchange_lookup:
+            position_key = local_pos.get('order_id') or local_pos.get('coin')
+            if position_key in exchange_lookup:
                 # Position exists on exchange; use exchange state
-                reconciled.append(exchange_lookup[order_id])
-                logger.debug(f"Position {order_id} verified with exchange")
+                reconciled.append(exchange_lookup[position_key])
+                logger.debug(f"Position {position_key} verified with exchange")
             else:
                 # Position missing from exchange; likely closed
-                logger.warning(f"Position {order_id} not found on exchange (likely closed)")
+                logger.warning(f"Position {position_key} not found on exchange (likely closed)")
+                raise ValueError(f"local position {position_key} not found on exchange")
 
         # Check for positions on exchange not in local (new/manual)
-        local_ids = {p.get('order_id') for p in local}
+        local_ids = {p.get('order_id') or p.get('coin') for p in local}
         for exchange_pos in exchange:
-            if exchange_pos.get('order_id') not in local_ids:
-                logger.warning(f"Unexpected position on exchange: {exchange_pos.get('order_id')}")
-                reconciled.append(exchange_pos)
+            position_key = exchange_pos.get('order_id') or exchange_pos.get('coin')
+            if position_key not in local_ids:
+                logger.warning(f"Unexpected position on exchange: {position_key}")
+                raise ValueError(f"unexpected exchange position {position_key}")
 
         return reconciled
 

@@ -86,8 +86,11 @@ class OrderExecutor:
             "status": exchange_order.get('status', 'filled'),
             "filled_quantity": exchange_order.get('filled_quantity', quantity),
             "filled_price": exchange_order.get('filled_price', current_price),
-            "fee_asset": "USDT",
-            "fee_quantity": quantity * current_price * (self.config.TAKER_FEE_PERCENT / 100),
+            "fee_asset": exchange_order.get('fee_asset', "USDT"),
+            "fee_quantity": exchange_order.get(
+                'fee_quantity',
+                quantity * current_price * (self.config.TAKER_FEE_PERCENT / 100)
+            ),
             "timestamp": self._now_iso(),
             "exchange_timestamp": self._now_iso(),
             "schema_version": "1.0.0",
@@ -103,7 +106,13 @@ class OrderExecutor:
         coin = position.get('coin', '')
         entry_side = position.get('side', 'LONG')
         exit_side = 'SELL' if entry_side == 'LONG' else 'BUY'
-        quantity = position.get('entry_quantity', 0) * (exit_condition.get('quantity_percent', 100) / 100)
+        entry_quantity = position.get('entry_quantity', 0)
+        remaining_quantity = position.get('remaining_quantity', entry_quantity)
+        quantity_percent = exit_condition.get('quantity_percent', 100)
+        if quantity_percent >= 100:
+            quantity = remaining_quantity
+        else:
+            quantity = min(remaining_quantity, entry_quantity * (quantity_percent / 100))
 
         signal_id = position.get('signal_id', str(uuid.uuid4()))
         client_order_id = f"{signal_id}/exit/{exit_condition.get('trigger', 'unknown')}"
@@ -135,8 +144,11 @@ class OrderExecutor:
             "status": exchange_order.get('status', 'filled'),
             "filled_quantity": exchange_order.get('filled_quantity', quantity),
             "filled_price": exchange_order.get('filled_price', current_price),
-            "fee_asset": "USDT",
-            "fee_quantity": quantity * current_price * (self.config.TAKER_FEE_PERCENT / 100),
+            "fee_asset": exchange_order.get('fee_asset', "USDT"),
+            "fee_quantity": exchange_order.get(
+                'fee_quantity',
+                quantity * current_price * (self.config.TAKER_FEE_PERCENT / 100)
+            ),
             "timestamp": self._now_iso(),
             "exchange_timestamp": self._now_iso(),
             "schema_version": "1.0.0",

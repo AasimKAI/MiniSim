@@ -50,6 +50,7 @@ class DecisionLogStatus(Enum):
     """Decision log record status."""
     PROPOSED = "proposed"
     APPROVED = "approved"
+    PENDING_APPROVAL = "pending_approval"
     EXECUTED = "executed"
     EXITED = "exited"
     VETOED = "vetoed"

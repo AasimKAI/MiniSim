@@ -51,5 +51,5 @@ SLACK_WEBHOOK_URL = None
 
 # RASPBERRY PI DEPLOYMENT
 # When moving to Pi, ensure config.py paths and secrets.py are present
-# No other changes needed for testnet mode
+# Testnet mode requires Binance Testnet keys; paper mode does not.
 RPI_DEPLOYMENT = False

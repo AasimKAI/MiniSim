@@ -11,7 +11,7 @@ Complete this checklist **before** moving the system to Raspberry Pi 5. This ens
 - [ ] All 23 tests pass locally
   ```bash
   python3 tests/run_tests.py
-  # Expected: RESULTS: 23 passed, 0 failed
+  # Expected: RESULTS: 32 passed, 0 failed
   ```
 
 - [ ] No uncommitted changes
@@ -218,7 +218,7 @@ Complete this checklist **before** moving the system to Raspberry Pi 5. This ens
 - [ ] Tests pass in all modes
   ```bash
   python3 tests/run_tests.py
-  # Expected: 23 passed regardless of mode
+  # Expected: 32 passed regardless of mode
   ```
 
 ---
@@ -445,7 +445,7 @@ After deploying to Pi, complete:
 - [ ] **24-hour validation** (Step 10.2)
 - [ ] **48-hour stability test** (Step 10.3)
 
-If all pass, system is production-ready for extended Testnet operation!
+If all pass, the system is ready for supervised extended Testnet observation.
 
 ---
 
