@@ -59,6 +59,14 @@ class StateReconciler:
         """
         reconciled = []
 
+        # CRITICAL CHECK: Local has positions but exchange is empty
+        if local and not exchange:
+            logger.error(f"CRITICAL: Local has {len(local)} positions but exchange is empty!")
+            logger.error("This indicates orphaned positions that were closed externally.")
+            logger.error("Positions will NOT be reopened. Manual verification required.")
+            # Return empty to prevent system from reopening orphaned positions
+            return []
+
         # Create lookup by order ID
         exchange_lookup = {p.get('order_id'): p for p in exchange}
 

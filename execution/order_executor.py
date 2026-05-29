@@ -53,8 +53,23 @@ class OrderExecutor:
                     client_order_id=client_order_id,
                 )
             except Exception as e:
-                logger.error(f"Order execution failed: {e}")
-                exchange_order = self._create_mock_order(signal_id, side, quantity, current_price)
+                error_msg = str(e).lower()
+                # Check if this is a duplicate order ID error (idempotent - return existing order)
+                if "duplicate" in error_msg or "client_order_id" in error_msg:
+                    logger.warning(f"Duplicate client_order_id {client_order_id}: {e}")
+                    # Try to fetch existing order from exchange
+                    try:
+                        exchange_order = self.binance_client.get_order(
+                            symbol=f"{coin}USDT",
+                            client_order_id=client_order_id,
+                        )
+                        logger.info(f"Retrieved existing order: {exchange_order}")
+                    except Exception as fetch_err:
+                        logger.error(f"Could not retrieve duplicate order: {fetch_err}")
+                        raise ValueError(f"Duplicate order but cannot retrieve: {e}")
+                else:
+                    logger.error(f"Order execution failed: {e}")
+                    raise
         else:
             # Mock for testing
             exchange_order = self._create_mock_order(signal_id, side, quantity, current_price)

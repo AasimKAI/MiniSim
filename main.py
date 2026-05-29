@@ -9,6 +9,7 @@ import logging
 import time
 import signal
 import sys
+import threading
 from datetime import datetime, timezone
 
 # Setup logging
@@ -31,6 +32,9 @@ class CryptoSignalSystem:
             logger.error(f"Failed to import config/secrets. Ensure config.py and secrets.py exist.")
             raise
 
+        # Validate required config fields
+        self._validate_config()
+
         self.mode = self.config.MODE
         logger.info(f"CryptoSignalSystem v2 initializing in mode: {self.mode}")
 
@@ -42,6 +46,41 @@ class CryptoSignalSystem:
         """Dynamically load module."""
         import importlib
         return importlib.import_module(module_name)
+
+    def _validate_config(self):
+        """Validate required config fields on startup."""
+        required_fields = [
+            'MODE', 'TRACKED_COINS', 'POSITION_SIZE_USD', 'MAX_EXPOSURE_USD',
+            'COLLECTOR_INTERVAL', 'VOLUME_SCAN_INTERVAL', 'BIG_TRADE_THRESHOLD_USD',
+            'SENTIMENT_MODEL', 'REGIME_FILTER_ENABLED', 'STATE_RECONCILIATION_ON_STARTUP',
+            'BINANCE_TESTNET_BASE_URL', 'KILL_SWITCH_PATH', 'TAKER_FEE_PERCENT'
+        ]
+
+        missing = []
+        for field in required_fields:
+            if not hasattr(self.config, field):
+                missing.append(field)
+
+        if missing:
+            raise ValueError(f"Missing required config fields: {', '.join(missing)}")
+
+        # Validate MODE is valid
+        if self.config.MODE not in ["fixture", "historical_replay", "paper", "testnet"]:
+            raise ValueError(f"Invalid MODE: {self.config.MODE}. Must be one of: fixture, historical_replay, paper, testnet")
+
+        # Validate TRACKED_COINS is not empty
+        if not self.config.TRACKED_COINS or not isinstance(self.config.TRACKED_COINS, (list, tuple)):
+            raise ValueError("TRACKED_COINS must be a non-empty list")
+
+        # Validate numeric fields
+        if self.config.POSITION_SIZE_USD <= 0:
+            raise ValueError("POSITION_SIZE_USD must be > 0")
+        if self.config.MAX_EXPOSURE_USD <= 0:
+            raise ValueError("MAX_EXPOSURE_USD must be > 0")
+        if self.config.MAX_EXPOSURE_USD < self.config.POSITION_SIZE_USD:
+            raise ValueError("MAX_EXPOSURE_USD must be >= POSITION_SIZE_USD")
+
+        logger.info("Config validation passed")
 
     def _init_layers(self):
         """Initialize all 6 layers."""
@@ -113,6 +152,7 @@ class CryptoSignalSystem:
 
         # State
         self.positions = {}  # position_id -> position
+        self.positions_lock = threading.RLock()  # Protect concurrent access to positions
         self.current_exposure_usd = 0.0
 
         logger.info("All layers initialized successfully")
@@ -309,8 +349,9 @@ class CryptoSignalSystem:
             "status": "open",
         }
 
-        self.positions[position.get('position_id')] = position
-        self.current_exposure_usd += position_size
+        with self.positions_lock:
+            self.positions[position.get('position_id')] = position
+            self.current_exposure_usd += position_size
 
         logger.info(f"  Position opened: {position.get('position_id')}")
 
@@ -323,7 +364,10 @@ class CryptoSignalSystem:
         """Check exit conditions for all open positions (priority loop)."""
         current_price = 50000  # mock
 
-        for position_id, position in list(self.positions.items()):
+        with self.positions_lock:
+            positions_snapshot = list(self.positions.items())
+
+        for position_id, position in positions_snapshot:
             exit_order = self.exit_manager.check_exit_conditions(
                 position, current_price, "trending"  # mock regime
             )
@@ -335,8 +379,12 @@ class CryptoSignalSystem:
                 exit_exec = self.order_executor.execute_exit_order(position, exit_order, current_price)
                 logger.info(f"Exit executed: {exit_exec.get('order_id')}")
 
-                # Update position
-                position['status'] = 'closed'
+                # Update position (with lock)
+                with self.positions_lock:
+                    if position_id in self.positions:
+                        self.positions[position_id]['status'] = 'closed'
+                        self.current_exposure_usd -= position.get('entry_quantity', 0) * position.get('entry_price', 0) * 0.01
+
                 self.decision_log.log_exited(
                     {"signal_id": position.get('signal_id'), "coin": position.get('coin')},
                     exit_order.get('trigger', 'unknown'),
@@ -345,9 +393,6 @@ class CryptoSignalSystem:
 
                 # Record for tax
                 self.tax_ledger.record_trade(exit_exec, price_gbp=40000, fx_rate=1.25)
-
-                # Update exposure
-                self.current_exposure_usd -= position.get('entry_quantity', 0) * position.get('entry_price', 0) * 0.01
 
     def _signal_handler(self, signum, frame):
         """Handle interrupt signals."""

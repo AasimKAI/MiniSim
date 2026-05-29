@@ -48,7 +48,16 @@ class ExitManager:
             except:
                 pass
 
-        # Check stop loss
+        # Check thesis condition FIRST (before stop loss) - intended exit before forced exit
+        if self._check_thesis_break(thesis_condition, regime):
+            return {
+                "trigger": "thesis_break",
+                "exit_type": "market",
+                "exit_price": current_price,
+                "quantity_percent": 100,
+            }
+
+        # Check stop loss (after thesis break)
         if current_price <= stop_loss:
             return {
                 "trigger": "stop_loss",
@@ -77,15 +86,6 @@ class ExitManager:
                     "exit_price": target.get('target_price'),
                     "quantity_percent": target.get('quantity_percent', 33.33),
                 }
-
-        # Check thesis condition (BEFORE stop loss)
-        if self._check_thesis_break(thesis_condition, regime):
-            return {
-                "trigger": "thesis_break",
-                "exit_type": "market",
-                "exit_price": current_price,
-                "quantity_percent": 100,
-            }
 
         return None
 
