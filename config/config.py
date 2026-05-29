@@ -122,10 +122,29 @@ HEARTBEAT_NOTIFICATION_THRESHOLD_SEC = 900  # alert if silent > 15 min
 
 # DASHBOARD
 DASHBOARD_ENABLED = True
-DASHBOARD_HOST = "localhost"
-DASHBOARD_PORT = 8000
-DASHBOARD_AUTH_ENABLED = False  # localhost is assumed safe
-DASHBOARD_LAN_MODE = False  # if True, requires auth + README acknowledgement
+DASHBOARD_HOST = "0.0.0.0"   # bind to all interfaces for LAN access on Pi
+DASHBOARD_PORT = 8080
+DASHBOARD_SESSION_HOURS = 24  # how long a Telegram-verified session lasts
+DASHBOARD_EXTERNAL_URL = "http://raspberrypi.local:8080"  # URL sent in Telegram login link
+
+# CCXT MULTI-EXCHANGE CLIENT
+CCXT_EXCHANGE = "binance"     # any ccxt exchange id (binance, kraken, coinbase, bybit…)
+CCXT_SANDBOX = False
+CCXT_QUOTE_CURRENCY = "USDT"  # used for balance filtering in get_open_positions()
+
+# BACKTESTING
+BACKTEST_RESULTS_DIR = "data/backtest_results"
+OHLC_CACHE_DIR = "data/ohlc_cache"
+BACKTEST_WARMUP_BARS = 50          # bars fed to indicators before decisions start
+BACKTEST_LLM_DELTA_TRIGGER = True  # only call LLM when analyst verdicts change
+BACKTEST_LLM_CACHE_ENABLED = True  # cache Ollama responses by prompt hash
+BACKTEST_ANALYSTS_ENABLED = {
+    "technical": True,
+    "volume": True,
+    "order_book": False,   # no OHLC equivalent
+    "on_chain": False,     # no OHLC equivalent
+    "sentiment": False,    # no OHLC equivalent
+}
 
 # KILL SWITCH
 KILL_SWITCH_PATH = "state/kill_switch.lock"

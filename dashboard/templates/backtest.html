@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Backtest{% endblock %}
+{% block content %}
+<h2>Backtest</h2>
+
+<div class="card">
+  <h3>New Run</h3>
+  <form method="POST" action="/backtest/run" class="run-form">
+    <div class="form-row">
+      <label>Coin
+        <select name="coin">
+          {% for c in coins %}<option>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Exchange
+        <select name="exchange">
+          {% for e in exchanges %}<option>{{ e }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Timeframe
+        <select name="timeframe">
+          {% for tf in timeframes %}<option>{{ tf }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-row">
+      <label>Start Date <input type="date" name="start_date" required></label>
+      <label>End Date <input type="date" name="end_date" required></label>
+    </div>
+    <button type="submit" class="btn-primary">Run Backtest</button>
+    <p class="muted">
+      Runs in background using real Ollama. Large date ranges on 5m timeframe may take
+      several hours on Pi — prefer 1h or 4h for quick validation runs.
+    </p>
+  </form>
+</div>
+
+<h3>Recent Runs</h3>
+{% if runs %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th><th>Coin</th><th>TF</th><th>Period</th>
+      <th>Return</th><th>Sharpe</th><th>Drawdown</th><th>Win%</th><th>Trades</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in runs %}
+    <tr>
+      <td><a href="/backtest/results/{{ r.run_id }}">{{ r.run_id }}</a></td>
+      <td><strong>{{ r.coin }}</strong></td>
+      <td>{{ r.timeframe }}</td>
+      <td class="muted">{{ r.start_date }} → {{ r.end_date }}</td>
+      <td class="{% if r.total_return_pct and r.total_return_pct >= 0 %}bull{% else %}bear{% endif %}">
+        {{ "%.1f" % r.total_return_pct if r.total_return_pct is not none else "—" }}%
+      </td>
+      <td>{{ "%.2f" % r.sharpe_ratio if r.sharpe_ratio is not none else "—" }}</td>
+      <td class="bear">{{ "%.1f" % r.max_drawdown_pct if r.max_drawdown_pct is not none else "—" }}%</td>
+      <td>{{ "%.0f" % (r.win_rate * 100) if r.win_rate is not none else "—" }}%</td>
+      <td>{{ r.trade_count if r.trade_count is not none else "—" }}</td>
+      <td class="muted">{{ r.status }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No backtest runs yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Run {{ summary.run_id }}{% endblock %}
+{% block content %}
+<h2>Backtest: {{ summary.coin }} {{ summary.timeframe }}
+  <span class="muted">{{ summary.start_date }} → {{ summary.end_date }}</span>
+</h2>
+<p><a href="/backtest/results">← All results</a></p>
+
+<div class="stat-row">
+  <div class="stat">
+    <span class="stat-label">Return</span>
+    <span class="stat-value {% if summary.total_return_pct >= 0 %}bull{% else %}bear{% endif %}">
+      {{ "%.1f" % summary.total_return_pct }}%
+    </span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Sharpe</span>
+    <span class="stat-value">{{ "%.2f" % summary.sharpe_ratio }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Max Drawdown</span>
+    <span class="stat-value bear">{{ "%.1f" % summary.max_drawdown_pct }}%</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Win Rate</span>
+    <span class="stat-value">{{ "%.0f" % (summary.win_rate * 100) }}%</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Trades</span>
+    <span class="stat-value">{{ summary.trade_count }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">LLM Cache Hit</span>
+    <span class="stat-value">{{ "%.0f" % (summary.llm_cache_hit_rate * 100) }}%</span>
+  </div>
+</div>
+
+{% if equity_curve_json and equity_curve_json != "[]" %}
+<div class="card">
+  <h3>Equity Curve</h3>
+  <canvas id="equityChart" style="max-height:300px"></canvas>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const data = {{ equity_curve_json | safe }};
+    new Chart(document.getElementById("equityChart"), {
+      type: "line",
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [{
+          label: "Equity ($)",
+          data: data.map(d => d.equity),
+          borderColor: "#4caf50",
+          backgroundColor: "rgba(76,175,80,0.1)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: false } }
+      }
+    });
+  });
+</script>
+{% endif %}
+
+{% if trades %}
+<h3>Trades</h3>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Entry</th><th>Exit</th><th>Side</th><th>Coin</th>
+      <th>Entry $</th><th>Exit $</th><th>P&amp;L $</th><th>P&amp;L %</th><th>Trigger</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for t in trades %}
+    <tr>
+      <td class="muted">{{ t.entry_ts[:10] if t.entry_ts else "?" }}</td>
+      <td class="muted">{{ t.exit_ts[:10] if t.exit_ts else "?" }}</td>
+      <td class="{% if t.side == 'LONG' %}bull{% else %}bear{% endif %}">{{ t.side }}</td>
+      <td><strong>{{ t.coin }}</strong></td>
+      <td>{{ "%.2f" % t.entry_price }}</td>
+      <td>{{ "%.2f" % t.exit_price }}</td>
+      <td class="{% if t.pnl_usd >= 0 %}bull{% else %}bear{% endif %}">{{ "%.2f" % t.pnl_usd }}</td>
+      <td class="{% if t.pnl_pct >= 0 %}bull{% else %}bear{% endif %}">{{ "%.1f" % t.pnl_pct }}%</td>
+      <td class="muted">{{ t.trigger }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No trades executed.</p>
+{% endif %}
+{% endblock %}

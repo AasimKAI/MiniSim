@@ -176,6 +176,10 @@ class CryptoSignalSystem:
         self.latest_prices = {}
         self.latest_regimes = {}
 
+        # Layer G: Backtest runner (shares config; instantiated here so dashboard can access it)
+        from backtest.backtest_runner import BacktestRunner
+        self.backtest_runner = BacktestRunner(self.config)
+
         logger.info("All layers initialized successfully")
 
     def _create_exchange_client(self, binance_client_cls, paper_client_cls):
@@ -210,6 +214,11 @@ class CryptoSignalSystem:
 
         self.running = True
         logger.info("System started. Running analysis/exit loops...")
+
+        # Start dashboard (Layer H) in background thread
+        if getattr(self.config, "DASHBOARD_ENABLED", False):
+            from dashboard.server import start_dashboard
+            start_dashboard(self.config, self.backtest_runner)
 
         # Setup signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)

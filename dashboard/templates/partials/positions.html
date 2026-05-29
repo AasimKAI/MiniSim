@@ -1,0 +1,44 @@
+{% if kill_switch_active %}
+<div class="alert alert-err">⚠ Kill switch active. All trading halted.</div>
+{% endif %}
+
+<div class="stat-row">
+  <div class="stat">
+    <span class="stat-label">Open Positions</span>
+    <span class="stat-value">{{ positions | length }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Exposure</span>
+    <span class="stat-value">${{ exposure }} / ${{ max_exposure }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Capacity</span>
+    <span class="stat-value">{{ ((max_exposure - exposure) / max_exposure * 100) | round(0) | int }}% free</span>
+  </div>
+</div>
+
+{% if positions %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Coin</th><th>Side</th><th>Entry $</th><th>Qty</th>
+      <th>Stop $</th><th>Size $</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in positions %}
+    <tr class="{% if p.status == 'closed' %}muted{% endif %}">
+      <td><strong>{{ p.coin }}</strong></td>
+      <td class="{% if p.side == 'LONG' %}bull{% else %}bear{% endif %}">{{ p.side }}</td>
+      <td>{{ p.entry_price | round(2) }}</td>
+      <td>{{ p.remaining_quantity | round(6) }}</td>
+      <td>{{ p.stop_loss | round(2) if p.stop_loss else "—" }}</td>
+      <td>${{ p.position_size_usd }}</td>
+      <td>{{ p.status }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No open positions.</p>
+{% endif %}

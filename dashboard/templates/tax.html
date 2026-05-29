@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Tax{% endblock %}
+{% block content %}
+<h2>Tax Ledger <span class="muted">({{ currency }})</span></h2>
+
+<div class="stat-row">
+  <div class="stat">
+    <span class="stat-label">Total Trades</span>
+    <span class="stat-value">{{ total_trades }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Total P&amp;L ({{ currency }})</span>
+    <span class="stat-value {% if total_gbp >= 0 %}bull{% else %}bear{% endif %}">
+      {{ total_gbp }}
+    </span>
+  </div>
+</div>
+
+<h3>Summary by Coin</h3>
+{% if summary %}
+<table class="data-table">
+  <thead>
+    <tr><th>Coin</th><th>Trades</th><th>P&amp;L ({{ currency }})</th></tr>
+  </thead>
+  <tbody>
+  {% for s in summary %}
+    <tr>
+      <td><strong>{{ s.coin }}</strong></td>
+      <td>{{ s.trades }}</td>
+      <td class="{% if s.total_gbp >= 0 %}bull{% else %}bear{% endif %}">
+        {{ s.total_gbp }}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No trades recorded yet.</p>
+{% endif %}
+
+{% if trades %}
+<h3>Recent Trades (last 50)</h3>
+<table class="data-table">
+  <thead>
+    <tr><th>Date</th><th>Coin</th><th>Qty</th><th>Price ({{ currency }})</th><th>Total ({{ currency }})</th></tr>
+  </thead>
+  <tbody>
+  {% for t in trades %}
+    <tr>
+      <td class="muted">{{ t.date[:10] if t.date else "?" }}</td>
+      <td><strong>{{ t.coin }}</strong></td>
+      <td>{{ t.quantity }}</td>
+      <td>{{ t.price_gbp }}</td>
+      <td class="{% if t.total_gbp >= 0 %}bull{% else %}bear{% endif %}">{{ t.total_gbp }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

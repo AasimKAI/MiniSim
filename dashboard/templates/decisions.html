@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Decisions{% endblock %}
+{% block content %}
+<h2>Decision Log <span class="muted">({{ total }} total)</span></h2>
+
+{% if decisions %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Time</th><th>Coin</th><th>Decision</th>
+      <th>Confidence</th><th>Regime</th><th>Outcome</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for d in decisions %}
+    <tr>
+      <td class="muted">{{ d.timestamp[:19] if d.timestamp else "?" }}</td>
+      <td><strong>{{ d.coin }}</strong></td>
+      <td class="{% if d.decision == 'entry_buy' %}bull{% elif d.decision == 'entry_sell' %}bear{% else %}muted{% endif %}">
+        {{ d.decision | upper }}
+      </td>
+      <td>{{ (d.confidence * 100) | round(0) | int }}%</td>
+      <td>{{ d.regime }}</td>
+      <td class="muted">{{ d.outcome if d.outcome else "—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="pagination">
+  {% if page > 1 %}
+    <a href="/decisions?page={{ page - 1 }}">← Previous</a>
+  {% endif %}
+  <span>Page {{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="/decisions?page={{ page + 1 }}">Next →</a>
+  {% endif %}
+</div>
+{% else %}
+<p class="muted">No decisions logged yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MiniSim · Login</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <h1>MiniSim Dashboard</h1>
+    <p class="muted">Access is controlled via Telegram.</p>
+
+    {% if message %}
+      <div class="alert {% if ok %}alert-ok{% else %}alert-err{% endif %}">{{ message }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login/request">
+      <button type="submit" class="btn-primary">Send me a login link via Telegram</button>
+    </form>
+  </div>
+</body>
+</html>

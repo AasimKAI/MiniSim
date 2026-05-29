@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+{% block content %}
+<h2>Backtest Results</h2>
+<p><a href="/backtest">← New run</a></p>
+
+{% if runs %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th><th>Coin</th><th>TF</th><th>Period</th>
+      <th>Return</th><th>Sharpe</th><th>Drawdown</th><th>Win%</th><th>Trades</th><th>Cache%</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in runs %}
+    <tr class="{% if r.run_id == highlight %}highlighted{% endif %}">
+      <td><a href="/backtest/results/{{ r.run_id }}">{{ r.run_id }}</a></td>
+      <td><strong>{{ r.coin }}</strong></td>
+      <td>{{ r.timeframe }}</td>
+      <td class="muted">{{ r.start_date }} → {{ r.end_date }}</td>
+      <td class="{% if r.total_return_pct and r.total_return_pct >= 0 %}bull{% else %}bear{% endif %}">
+        {{ "%.1f" % r.total_return_pct if r.total_return_pct is not none else "—" }}%
+      </td>
+      <td>{{ "%.2f" % r.sharpe_ratio if r.sharpe_ratio is not none else "—" }}</td>
+      <td class="bear">{{ "%.1f" % r.max_drawdown_pct if r.max_drawdown_pct is not none else "—" }}%</td>
+      <td>{{ "%.0f" % (r.win_rate * 100) if r.win_rate is not none else "—" }}%</td>
+      <td>{{ r.trade_count if r.trade_count is not none else "—" }}</td>
+      <td class="muted">{{ "%.0f" % (r.llm_cache_hit_rate * 100) if r.llm_cache_hit_rate is not none else "—" }}%</td>
+      <td class="muted">{{ r.status }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No runs yet.</p>
+{% endif %}
+{% endblock %}

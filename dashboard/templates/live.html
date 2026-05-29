@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Live{% endblock %}
+{% block content %}
+<h2>Live Overview</h2>
+
+<div id="positions-panel"
+     hx-get="/live/positions"
+     hx-trigger="every 10s"
+     hx-swap="innerHTML">
+  {% include "partials/positions.html" %}
+</div>
+
+<h3>Recent Decisions</h3>
+{% if recent_decisions %}
+<table class="data-table">
+  <thead>
+    <tr><th>Time</th><th>Coin</th><th>Decision</th><th>Confidence</th><th>Regime</th></tr>
+  </thead>
+  <tbody>
+  {% for d in recent_decisions %}
+    <tr>
+      <td class="muted">{{ d.timestamp[:19] if d.timestamp else "?" }}</td>
+      <td><strong>{{ d.coin }}</strong></td>
+      <td class="{% if d.decision == 'entry_buy' %}bull{% elif d.decision == 'entry_sell' %}bear{% else %}muted{% endif %}">
+        {{ d.decision | upper }}
+      </td>
+      <td>{{ (d.confidence * 100) | round(0) | int }}%</td>
+      <td>{{ d.regime }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No decisions logged yet.</p>
+{% endif %}
+{% endblock %}
