@@ -416,6 +416,34 @@ def test_exit_profit_target():
     assert_in(exit_order["trigger"], ["profit_target_1"])
 
 
+@test("Exit Manager: short stop loss and profit target directions")
+def test_exit_short_directions():
+    class Config:
+        TRAILING_STOP_PERCENT = 3.0
+
+    from execution.exit_manager import ExitManager
+
+    em = ExitManager(Config())
+    position = {
+        "side": "SHORT",
+        "entry_price": 50000,
+        "stop_loss": 51000,
+        "take_profit_targets": [{"target_price": 47500, "quantity_percent": 100}],
+        "trailing_stop_activated": False,
+        "thesis_condition": {},
+        "max_hold_time_sec": 172800,
+        "entry_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    stop_exit = em.check_exit_conditions(position, current_price=51200, regime="trending")
+    assert_true(stop_exit is not None)
+    assert_equal(stop_exit["trigger"], "stop_loss")
+
+    profit_exit = em.check_exit_conditions(position, current_price=47000, regime="trending")
+    assert_true(profit_exit is not None)
+    assert_equal(profit_exit["trigger"], "profit_target_1")
+
+
 # ============================================================================
 # KILL SWITCH TESTS
 # ============================================================================
@@ -456,26 +484,30 @@ def test_kill_switch():
 @test("Decision Log: log proposed signal")
 def test_decision_log():
     from records.decision_log import DecisionLog
+    import tempfile
+    import os
 
     class Config:
         pass
 
-    dl = DecisionLog(Config())
-    signal = {
-        "signal_id": "sig_123",
-        "coin": "BTC",
-        "decision": "entry_buy",
-        "view": "bullish",
-        "confidence": 0.8,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_file = os.path.join(tmpdir, "decision_log.jsonl")
+        dl = DecisionLog(Config(), log_file=log_file)
+        signal = {
+            "signal_id": "sig_123",
+            "coin": "BTC",
+            "decision": "entry_buy",
+            "view": "bullish",
+            "confidence": 0.8,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
-    log_id = dl.log_proposed(signal)
-    assert_true(log_id)
+        log_id = dl.log_proposed(signal)
+        assert_true(log_id)
 
-    entries = dl.get_all()
-    assert_greater(len(entries), 0)
-    assert_equal(entries[0]["status"], "proposed")
+        entries = dl.get_all()
+        assert_equal(len(entries), 1)
+        assert_equal(entries[0]["status"], "proposed")
 
 
 # ============================================================================
@@ -554,6 +586,54 @@ def test_order_executor_entry():
     assert_equal(order["coin"], "BTC")
     assert_equal(order["side"], "BUY")
     assert_greater(order["quantity"], 0)
+
+
+@test("Order Executor: real exit failure is not mocked as filled")
+def test_order_executor_exit_failure_raises():
+    class Config:
+        BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+        TAKER_FEE_PERCENT = 0.1
+
+    class FailingClient:
+        def execute(self, **kwargs):
+            raise RuntimeError("exchange unavailable")
+
+    from execution.order_executor import OrderExecutor
+
+    oe = OrderExecutor(Config(), binance_client=FailingClient())
+    position = {
+        "signal_id": "sig_123",
+        "coin": "BTC",
+        "side": "LONG",
+        "entry_quantity": 0.1,
+    }
+    exit_condition = {"trigger": "stop_loss", "quantity_percent": 100}
+
+    try:
+        oe.execute_exit_order(position, exit_condition, current_price=49000)
+    except RuntimeError:
+        return
+
+    raise AssertionError("exit failure should propagate instead of creating a mock fill")
+
+
+@test("Telegram Approver: only big trades require approval")
+def test_telegram_approver_only_big_trades():
+    class Config:
+        TELEGRAM_ENABLED = True
+        TELEGRAM_APPROVAL_TIMEOUT_SEC = 300
+
+    from execution.telegram_approver import TelegramApprover
+
+    approver = TelegramApprover(Config())
+    small_signal = {"signal_id": "small", "decision": "entry_buy", "is_big_trade": False}
+    big_signal = {"signal_id": "big", "decision": "entry_buy", "is_big_trade": True}
+
+    small = approver.request_approval(small_signal)
+    big = approver.request_approval(big_signal)
+
+    assert_equal(small["approval_id"], "auto")
+    assert_true(big["approval_id"] != "auto")
 
 
 # ============================================================================
@@ -658,7 +738,10 @@ def run_all_tests():
     test_risk_manager_kill_switch()
     test_exit_stop_loss()
     test_exit_profit_target()
+    test_exit_short_directions()
     test_order_executor_entry()
+    test_order_executor_exit_failure_raises()
+    test_telegram_approver_only_big_trades()
     print()
 
     # Run operations tests

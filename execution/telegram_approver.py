@@ -27,7 +27,7 @@ class TelegramApprover:
         Request approval for big trade.
         Returns: {"approval_id": str, "expires_at": ISO8601}
         """
-        if not self.enabled or signal.get('decision') == 'stand_down':
+        if not self.enabled or signal.get('decision') == 'stand_down' or not signal.get('is_big_trade', False):
             return {"approval_id": "auto", "expires_at": self._now_iso()}
 
         signal_id = signal.get('signal_id', '')

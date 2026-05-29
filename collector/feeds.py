@@ -7,7 +7,18 @@ Each feed has retry-with-backoff, respects rate limits.
 import logging
 from typing import Dict, List, Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
+
+
+COINGECKO_IDS = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "XRP": "ripple",
+    "ADA": "cardano",
+    "SOL": "solana",
+}
 
 
 class Feed:
@@ -37,13 +48,29 @@ class FeedCoinGecko(Feed):
         """
         items = []
         for coin in self.config.TRACKED_COINS:
-            # Simulated data for testnet
+            coingecko_id = COINGECKO_IDS.get(coin)
+            if not coingecko_id:
+                logger.warning(f"No CoinGecko id configured for {coin}")
+                continue
+
+            market = self._get_json(
+                f"https://api.coingecko.com/api/v3/coins/{coingecko_id}/market_chart",
+                {"vs_currency": "usd", "days": "3", "interval": "hourly"},
+            )
+            prices = [point[1] for point in market.get("prices", []) if len(point) >= 2]
+            volumes = [point[1] for point in market.get("total_volumes", []) if len(point) >= 2]
+            if not prices:
+                logger.warning(f"CoinGecko returned no price history for {coin}")
+                continue
+
             items.append({
                 "coin": coin,
-                "price_usd": 50000.0 if coin == "BTC" else 3000.0,
-                "volume_24h_usd": 1000000.0,
-                "market_cap_usd": 1000000000.0,
-                "change_24h_percent": 1.5,
+                "price_usd": prices[-1],
+                "price_history_usd": prices,
+                "volume_history_usd": volumes,
+                "volume_24h_usd": volumes[-1] if volumes else 0.0,
+                "market_cap_usd": None,
+                "change_24h_percent": self._percent_change(prices[-24:]) if len(prices) >= 24 else None,
                 "timestamp": self._timestamp(),
             })
 
@@ -56,6 +83,16 @@ class FeedCoinGecko(Feed):
     def _timestamp(self) -> str:
         from collector.utils import now_iso
         return now_iso()
+
+    def _get_json(self, url: str, params: Dict) -> Dict:
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    def _percent_change(self, prices: List[float]) -> Optional[float]:
+        if len(prices) < 2 or prices[0] == 0:
+            return None
+        return ((prices[-1] - prices[0]) / prices[0]) * 100
 
 
 class FeedNews(Feed):
@@ -72,16 +109,28 @@ class FeedNews(Feed):
         Fetch news articles for tracked coins.
         Returns: {"items": [{"coin": "BTC", "headline": "...", "source": "...", "sentiment": ...}, ...]}
         """
-        items = []
-        for coin in self.config.TRACKED_COINS:
-            items.append({
-                "coin": coin,
-                "headline": f"Market analysis for {coin}",
-                "source": "news_feed",
-                "sentiment_keyword": "neutral",
-                "url": "https://example.com",
-                "timestamp": self._timestamp(),
-            })
+        api_key = getattr(self.config, "NEWSAPI_KEY", None)
+        if not api_key:
+            logger.info("NEWSAPI_KEY not configured; news feed unavailable")
+            items = []
+        else:
+            items = []
+            for coin in self.config.TRACKED_COINS:
+                payload = requests.get(
+                    "https://newsapi.org/v2/everything",
+                    params={"q": f"{coin} crypto", "apiKey": api_key, "pageSize": 5, "sortBy": "publishedAt"},
+                    timeout=15,
+                )
+                payload.raise_for_status()
+                for article in payload.json().get("articles", []):
+                    items.append({
+                        "coin": coin,
+                        "headline": article.get("title", ""),
+                        "source": article.get("source", {}).get("name", "newsapi"),
+                        "sentiment_keyword": "neutral",
+                        "url": article.get("url", ""),
+                        "timestamp": article.get("publishedAt") or self._timestamp(),
+                    })
 
         return {
             "source": "news",
@@ -108,15 +157,8 @@ class FeedReddit(Feed):
         Fetch Reddit posts/comments for tracked coins.
         Returns: {"items": [{"coin": "BTC", "posts_24h": 100, "sentiment_avg": 0.5}, ...]}
         """
+        logger.info("Reddit feed requires API credentials; returning no fabricated data")
         items = []
-        for coin in self.config.TRACKED_COINS:
-            items.append({
-                "coin": coin,
-                "posts_24h": 100,
-                "comments_24h": 500,
-                "sentiment_avg": 0.5,
-                "timestamp": self._timestamp(),
-            })
 
         return {
             "source": "reddit",
@@ -143,15 +185,8 @@ class FeedTwitter(Feed):
         Fetch tweets mentioning tracked coins.
         Returns: {"items": [{"coin": "BTC", "tweets_24h": 1000, "sentiment_avg": 0.5}, ...]}
         """
+        logger.info("Twitter feed requires API credentials; returning no fabricated data")
         items = []
-        for coin in self.config.TRACKED_COINS:
-            items.append({
-                "coin": coin,
-                "tweets_24h": 1000,
-                "retweets_24h": 5000,
-                "sentiment_avg": 0.5,
-                "timestamp": self._timestamp(),
-            })
 
         return {
             "source": "twitter",
@@ -179,15 +214,34 @@ class FeedBinanceOrderBook(Feed):
         Returns: {"items": [{"coin": "BTC", "buy_pressure": 0.5, "spread_percent": 0.05}, ...]}
         """
         items = []
+        base_url = getattr(self.config, "BINANCE_MARKET_DATA_BASE_URL", "https://api.binance.com")
         for coin in self.config.TRACKED_COINS:
+            symbol = getattr(self.config, "BINANCE_SPOT_SYMBOL_FORMAT", "{}USDT").format(coin)
+            payload = requests.get(
+                f"{base_url}/api/v3/depth",
+                params={"symbol": symbol, "limit": 50},
+                timeout=15,
+            )
+            payload.raise_for_status()
+            data = payload.json()
+            bids = [(float(price), float(qty)) for price, qty in data.get("bids", [])]
+            asks = [(float(price), float(qty)) for price, qty in data.get("asks", [])]
+            if not bids or not asks:
+                logger.warning(f"Binance order book empty for {symbol}")
+                continue
+            best_bid = bids[0][0]
+            best_ask = asks[0][0]
+            mid = (best_bid + best_ask) / 2
+            bid_volume = sum(qty for _, qty in bids)
+            ask_volume = sum(qty for _, qty in asks)
             items.append({
                 "coin": coin,
-                "bid": 49900.0,
-                "ask": 50100.0,
-                "spread_percent": 0.04,
-                "bid_volume": 10.0,
-                "ask_volume": 10.0,
-                "imbalance_ratio": 1.0,
+                "bid": best_bid,
+                "ask": best_ask,
+                "spread_percent": ((best_ask - best_bid) / mid) * 100 if mid else 0,
+                "bid_volume": bid_volume,
+                "ask_volume": ask_volume,
+                "imbalance_ratio": bid_volume / ask_volume if ask_volume else None,
                 "timestamp": self._timestamp(),
             })
 
@@ -216,16 +270,8 @@ class FeedOnChain(Feed):
         Fetch on-chain metrics for tracked coins.
         Returns: {"items": [{"coin": "BTC", "whale_accumulation": 10.5, "exchange_inflow": -5.2}, ...]}
         """
+        logger.info("On-chain feed requires a provider integration; returning no fabricated data")
         items = []
-        for coin in self.config.TRACKED_COINS:
-            items.append({
-                "coin": coin,
-                "whale_wallets_accumulating": True,
-                "exchange_netflow_24h_coins": -5.2,
-                "active_addresses": 1000000,
-                "transaction_volume_24h": 500000.0,
-                "timestamp": self._timestamp(),
-            })
 
         return {
             "source": "on_chain",
@@ -252,24 +298,8 @@ class FeedEconomicCalendar(Feed):
         Fetch upcoming economic events.
         Returns: {"items": [{"event": "Fed Rate Decision", "impact": "high", "date": "2026-06-18"}, ...]}
         """
-        items = [
-            {
-                "event": "Fed Rate Decision",
-                "impact": "high",
-                "date": "2026-06-18",
-                "previous": "5.50%",
-                "forecast": "5.50%",
-                "timestamp": self._timestamp(),
-            },
-            {
-                "event": "US Inflation (CPI)",
-                "impact": "high",
-                "date": "2026-06-12",
-                "previous": "3.5%",
-                "forecast": "3.4%",
-                "timestamp": self._timestamp(),
-            }
-        ]
+        logger.info("Economic calendar provider not configured; returning no fabricated data")
+        items = []
 
         return {
             "source": "economic_calendar",

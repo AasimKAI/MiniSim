@@ -54,19 +54,26 @@ class RiskManager:
             "max_hold_time_sec": float,
         }
         """
-        stop_loss = entry_price * (1 - self.config.STOP_LOSS_PERCENT / 100)
+        is_short = signal.get('decision') == 'entry_sell'
+        stop_loss = (
+            entry_price * (1 + self.config.STOP_LOSS_PERCENT / 100)
+            if is_short
+            else entry_price * (1 - self.config.STOP_LOSS_PERCENT / 100)
+        )
+
+        target_direction = -1 if is_short else 1
 
         profit_targets = [
             {
-                "target_price": entry_price * (1 + self.config.TAKE_PROFIT_TARGET_1_PERCENT / 100),
+                "target_price": entry_price * (1 + target_direction * self.config.TAKE_PROFIT_TARGET_1_PERCENT / 100),
                 "quantity_percent": 33.33,
             },
             {
-                "target_price": entry_price * (1 + self.config.TAKE_PROFIT_TARGET_2_PERCENT / 100),
+                "target_price": entry_price * (1 + target_direction * self.config.TAKE_PROFIT_TARGET_2_PERCENT / 100),
                 "quantity_percent": 33.33,
             },
             {
-                "target_price": entry_price * (1 + self.config.TAKE_PROFIT_TARGET_3_PERCENT / 100),
+                "target_price": entry_price * (1 + target_direction * self.config.TAKE_PROFIT_TARGET_3_PERCENT / 100),
                 "quantity_percent": 33.34,
             },
         ]

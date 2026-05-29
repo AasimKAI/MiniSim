@@ -24,6 +24,7 @@ class ExitManager:
         Returns: exit_order or None.
         """
         entry_price = position.get('entry_price', 0)
+        side = position.get('side', 'LONG')
         stop_loss = position.get('stop_loss', 0)
         profit_targets = position.get('take_profit_targets', [])
         trailing_stop = position.get('trailing_stop', entry_price)
@@ -58,7 +59,8 @@ class ExitManager:
             }
 
         # Check stop loss (after thesis break)
-        if current_price <= stop_loss:
+        stop_loss_hit = current_price <= stop_loss if side == 'LONG' else current_price >= stop_loss
+        if stop_loss_hit:
             return {
                 "trigger": "stop_loss",
                 "exit_type": "market",
@@ -68,8 +70,12 @@ class ExitManager:
 
         # Check trailing stop
         if position.get('trailing_stop_activated', False):
-            trailing_stop_price = max(position.get('trailing_stop_level', entry_price), trailing_stop)
-            if current_price <= trailing_stop_price:
+            if side == 'LONG':
+                trailing_stop_price = max(position.get('trailing_stop_level', entry_price), trailing_stop)
+            else:
+                trailing_stop_price = min(position.get('trailing_stop_level', entry_price), trailing_stop)
+            trailing_hit = current_price <= trailing_stop_price if side == 'LONG' else current_price >= trailing_stop_price
+            if trailing_hit:
                 return {
                     "trigger": "trailing_stop",
                     "exit_type": "market",
@@ -79,12 +85,23 @@ class ExitManager:
 
         # Check profit targets
         for i, target in enumerate(profit_targets):
-            if current_price >= target.get('target_price', float('inf')):
+            if isinstance(target, dict):
+                target_price = target.get('target_price')
+                quantity_percent = target.get('quantity_percent', 33.33)
+            else:
+                target_price = target
+                quantity_percent = 33.33
+
+            if target_price is None:
+                continue
+
+            target_hit = current_price >= target_price if side == 'LONG' else current_price <= target_price
+            if target_hit:
                 return {
                     "trigger": f"profit_target_{i + 1}",
                     "exit_type": "limit",
-                    "exit_price": target.get('target_price'),
-                    "quantity_percent": target.get('quantity_percent', 33.33),
+                    "exit_price": target_price,
+                    "quantity_percent": quantity_percent,
                 }
 
         return None
@@ -102,12 +119,16 @@ class ExitManager:
     def update_trailing_stop(self, position: Dict, current_price: float) -> Dict:
         """Update trailing stop for position."""
         entry_price = position.get('entry_price', 0)
+        side = position.get('side', 'LONG')
         trailing_percent = self.config.TRAILING_STOP_PERCENT
 
-        if current_price > entry_price:
-            # We're in profit; activate and update trailing stop
+        if side == 'LONG' and current_price > entry_price:
             trailing_level = current_price * (1 - trailing_percent / 100)
             position['trailing_stop_activated'] = True
             position['trailing_stop_level'] = max(position.get('trailing_stop_level', entry_price), trailing_level)
+        elif side == 'SHORT' and current_price < entry_price:
+            trailing_level = current_price * (1 + trailing_percent / 100)
+            position['trailing_stop_activated'] = True
+            position['trailing_stop_level'] = min(position.get('trailing_stop_level', entry_price), trailing_level)
 
         return position

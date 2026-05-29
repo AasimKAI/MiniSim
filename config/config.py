@@ -99,6 +99,7 @@ SLIPPAGE_PERCENT = 0.05
 
 # BINANCE TESTNET
 BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+BINANCE_MARKET_DATA_BASE_URL = "https://api.binance.com"  # public live market data
 BINANCE_SPOT_SYMBOL_FORMAT = "{}USDT"  # BTC -> BTCUSDT
 
 # NOTIFICATIONS & APPROVALS

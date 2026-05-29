@@ -11,6 +11,7 @@ import signal
 import sys
 import threading
 from datetime import datetime, timezone
+from typing import Optional
 
 # Setup logging
 logging.basicConfig(
@@ -32,6 +33,8 @@ class CryptoSignalSystem:
             logger.error(f"Failed to import config/secrets. Ensure config.py and secrets.py exist.")
             raise
 
+        self._merge_secrets_into_config()
+
         # Validate required config fields
         self._validate_config()
 
@@ -46,6 +49,12 @@ class CryptoSignalSystem:
         """Dynamically load module."""
         import importlib
         return importlib.import_module(module_name)
+
+    def _merge_secrets_into_config(self):
+        """Expose optional secret values to components without hard-coding secrets in config.py."""
+        for name in dir(self.secrets):
+            if name.isupper() and not hasattr(self.config, name):
+                setattr(self.config, name, getattr(self.secrets, name))
 
     def _validate_config(self):
         """Validate required config fields on startup."""
@@ -154,6 +163,8 @@ class CryptoSignalSystem:
         self.positions = {}  # position_id -> position
         self.positions_lock = threading.RLock()  # Protect concurrent access to positions
         self.current_exposure_usd = 0.0
+        self.latest_prices = {}
+        self.latest_regimes = {}
 
         logger.info("All layers initialized successfully")
 
@@ -261,21 +272,43 @@ class CryptoSignalSystem:
             if not self.config.ANALYSTS_ENABLED.get(analyst_name, True):
                 continue
 
-            # Get analyst-specific data from clean_data
-            # For now, use mock data
+            market_item = self._coin_feed_item(clean_data, "coingecko", coin)
+            if not market_item or not market_item.get("price_usd"):
+                logger.warning(f"  No live market price for {coin}; standing down")
+                return
+
+            prices = market_item.get("price_history_usd") or [market_item["price_usd"]]
+            volumes = market_item.get("volume_history_usd") or [market_item.get("volume_24h_usd", 0)]
+            order_book_item = self._coin_feed_item(clean_data, "binance_orderbook", coin) or {}
+            on_chain_item = self._coin_feed_item(clean_data, "on_chain", coin) or {}
+
+            self.latest_prices[coin] = prices[-1]
+
             if analyst_name == "technical":
-                prices = [50000 + i * 100 for i in range(50)]
                 verdict = analyst.analyze(coin, prices)
             elif analyst_name == "volume":
-                volumes = [1000 * (1 + i * 0.05) for i in range(20)]
-                prices = [50000 + i * 50 for i in range(20)]
                 verdict = analyst.analyze(coin, volumes, prices)
             elif analyst_name == "order_book":
-                verdict = analyst.analyze(coin, bid_volume=100, ask_volume=90, spread_percent=0.05)
+                verdict = analyst.analyze(
+                    coin,
+                    bid_volume=order_book_item.get("bid_volume", 0),
+                    ask_volume=order_book_item.get("ask_volume", 0),
+                    spread_percent=order_book_item.get("spread_percent", 0),
+                )
             elif analyst_name == "on_chain":
-                verdict = analyst.analyze(coin, transaction_volume=1000, active_addresses=150000, whale_activity=0.5)
+                verdict = analyst.analyze(
+                    coin,
+                    transaction_volume=on_chain_item.get("transaction_volume_24h", 0),
+                    active_addresses=on_chain_item.get("active_addresses", 0),
+                    whale_activity=on_chain_item.get("whale_activity", 0),
+                )
             elif analyst_name == "sentiment":
-                verdict = analyst.analyze(coin, news_sentiment="positive", reddit_sentiment="neutral", twitter_sentiment="positive")
+                verdict = analyst.analyze(
+                    coin,
+                    news_sentiment=self._sentiment_for(clean_data, "news", coin),
+                    reddit_sentiment=self._sentiment_for(clean_data, "reddit", coin),
+                    twitter_sentiment=self._sentiment_for(clean_data, "twitter", coin),
+                )
             else:
                 continue
 
@@ -283,9 +316,11 @@ class CryptoSignalSystem:
             logger.info(f"  {analyst_name}: {verdict.get('view')} ({verdict.get('confidence', 0):.1%})")
 
         # Layer B: Regime detection
-        self.regime_detector.record_price(coin, 50000)  # mock current price
+        for price in (self._coin_feed_item(clean_data, "coingecko", coin) or {}).get("price_history_usd", []):
+            self.regime_detector.record_price(coin, price)
         regime_info = self.regime_detector.detect_regime(coin)
         regime = regime_info.get('regime', 'neutral')
+        self.latest_regimes[coin] = regime
         logger.info(f"  Regime: {regime}")
 
         # Layer C: Decision
@@ -322,15 +357,25 @@ class CryptoSignalSystem:
         # Telegram approval for big trades
         approval = self.telegram_approver.request_approval(signal)
         approval_id = approval.get('approval_id', 'auto')
+        if approval_id != "auto":
+            logger.warning(f"  Trade requires Telegram approval before execution (approval_id: {approval_id})")
+            self.decision_log.log_vetoed(signal, f"awaiting Telegram approval: {approval_id}")
+            return
 
         # Layer D: Execution
-        current_price = 50000  # mock
+        current_price = self.latest_prices.get(coin)
+        if not current_price:
+            logger.warning(f"  No live execution price for {coin}; standing down")
+            self.decision_log.log_vetoed(signal, "missing live execution price")
+            return
         order = self.order_executor.execute_entry_order(signal, position_size, current_price)
 
         logger.info(f"  Order: {order.get('side')} {order.get('quantity'):.4f} {coin} @ {order.get('price'):.2f}")
 
         self.decision_log.log_approved(signal, approval_id)
         self.decision_log.log_executed(signal, order.get('order_id', ''), order.get('filled_price', 0))
+
+        exit_plan = self.risk_manager.calculate_exit_plan(current_price, coin, signal)
 
         # Create position record
         position = {
@@ -341,11 +386,13 @@ class CryptoSignalSystem:
             "entry_price": current_price,
             "entry_quantity": order.get('filled_quantity', 0),
             "entry_timestamp": datetime.now(timezone.utc).isoformat(),
-            "stop_loss": current_price * 0.98,
-            "take_profit_targets": [current_price * 1.05, current_price * 1.10],
+            "position_size_usd": position_size,
+            "stop_loss": exit_plan["stop_loss"],
+            "take_profit_targets": exit_plan["profit_targets"],
             "trailing_stop_activated": False,
-            "thesis_condition": {"type": "signal_validity"},
-            "max_hold_time_sec": self.config.MAX_HOLD_TIME_HOURS * 3600,
+            "trailing_stop": current_price,
+            "thesis_condition": exit_plan["thesis_condition"],
+            "max_hold_time_sec": exit_plan["max_hold_time_sec"],
             "status": "open",
         }
 
@@ -362,28 +409,47 @@ class CryptoSignalSystem:
 
     def _check_exits(self):
         """Check exit conditions for all open positions (priority loop)."""
-        current_price = 50000  # mock
-
         with self.positions_lock:
             positions_snapshot = list(self.positions.items())
 
         for position_id, position in positions_snapshot:
+            if position.get('status') != 'open':
+                continue
+
+            current_price = self.latest_prices.get(position.get('coin'))
+            if not current_price:
+                logger.debug(f"No live price for exit check on {position.get('coin')}")
+                continue
+
+            position = self.exit_manager.update_trailing_stop(position, current_price)
             exit_order = self.exit_manager.check_exit_conditions(
-                position, current_price, "trending"  # mock regime
+                position, current_price, self.latest_regimes.get(position.get('coin'), 'neutral')
             )
 
             if exit_order:
                 logger.info(f"Exit triggered for {position_id}: {exit_order.get('trigger')}")
 
-                # Execute exit
-                exit_exec = self.order_executor.execute_exit_order(position, exit_order, current_price)
+                try:
+                    exit_exec = self.order_executor.execute_exit_order(position, exit_order, current_price)
+                except Exception as e:
+                    logger.error(f"Exit execution failed for {position_id}: {e}")
+                    self.kill_switch.activate(f"exit execution failed for {position_id}")
+                    continue
+
+                if exit_exec.get('status') not in ('filled', 'partially_filled'):
+                    logger.error(f"Exit did not fill for {position_id}: {exit_exec.get('status')}")
+                    self.kill_switch.activate(f"exit not filled for {position_id}")
+                    continue
                 logger.info(f"Exit executed: {exit_exec.get('order_id')}")
 
                 # Update position (with lock)
                 with self.positions_lock:
                     if position_id in self.positions:
                         self.positions[position_id]['status'] = 'closed'
-                        self.current_exposure_usd -= position.get('entry_quantity', 0) * position.get('entry_price', 0) * 0.01
+                        self.current_exposure_usd = max(
+                            0.0,
+                            self.current_exposure_usd - position.get('position_size_usd', 0)
+                        )
 
                 self.decision_log.log_exited(
                     {"signal_id": position.get('signal_id'), "coin": position.get('coin')},
@@ -393,6 +459,30 @@ class CryptoSignalSystem:
 
                 # Record for tax
                 self.tax_ledger.record_trade(exit_exec, price_gbp=40000, fx_rate=1.25)
+
+    def _coin_feed_item(self, clean_data: dict, feed_name: str, coin: str) -> Optional[dict]:
+        items = clean_data.get("feeds", {}).get(feed_name, {}).get("items", [])
+        for item in items:
+            if item.get("coin") == coin:
+                return item
+        return None
+
+    def _sentiment_for(self, clean_data: dict, feed_name: str, coin: str) -> Optional[str]:
+        item = self._coin_feed_item(clean_data, feed_name, coin)
+        if not item:
+            return None
+        if "sentiment_keyword" in item:
+            return item.get("sentiment_keyword")
+        if "sentiment_avg" in item:
+            score = item.get("sentiment_avg")
+            if score is None:
+                return None
+            if score > 0.6:
+                return "positive"
+            if score < 0.4:
+                return "negative"
+            return "neutral"
+        return None
 
     def _signal_handler(self, signum, frame):
         """Handle interrupt signals."""

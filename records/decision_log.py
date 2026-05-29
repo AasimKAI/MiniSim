@@ -7,6 +7,7 @@ Schema Annex 3.4.
 import logging
 import json
 import uuid
+from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
@@ -19,7 +20,7 @@ class DecisionLog:
     def __init__(self, config, log_file: str = "data/decision_log.jsonl"):
         self.config = config
         self.log_file = log_file
-        self.entries = []
+        self.entries = self._load_existing_entries()
 
     def log_proposed(self, signal: Dict) -> str:
         """Log proposed signal."""
@@ -107,13 +108,35 @@ class DecisionLog:
     def _append(self, entry: Dict) -> None:
         """Append entry to log."""
         self.entries.append(entry)
-        # Also write to file (atomic)
         try:
-            from collector.utils import atomic_write_json
-            all_entries = self.get_all()
-            atomic_write_json(self.log_file, all_entries)
+            path = Path(self.log_file)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
         except Exception as e:
             logger.error(f"Failed to write decision log: {e}")
+
+    def _load_existing_entries(self) -> List[Dict]:
+        """Load prior JSONL entries without blocking startup on malformed history."""
+        path = Path(self.log_file)
+        if not path.exists():
+            return []
+
+        entries = []
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+            if not text:
+                return []
+            if text.startswith("["):
+                loaded = json.loads(text)
+                return loaded if isinstance(loaded, list) else []
+            for line in text.splitlines():
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+        except Exception as e:
+            logger.error(f"Failed to load existing decision log: {e}")
+        return entries
 
     def get_all(self) -> List[Dict]:
         """Get all log entries."""

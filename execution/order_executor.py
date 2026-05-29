@@ -120,7 +120,7 @@ class OrderExecutor:
                 )
             except Exception as e:
                 logger.error(f"Exit order failed: {e}")
-                exchange_order = self._create_mock_order(signal_id, exit_side, quantity, current_price)
+                raise
         else:
             exchange_order = self._create_mock_order(signal_id, exit_side, quantity, current_price)
 
