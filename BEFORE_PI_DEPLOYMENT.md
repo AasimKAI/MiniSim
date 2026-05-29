@@ -11,7 +11,7 @@ Complete this checklist **before** moving the system to Raspberry Pi 5. This ens
 - [ ] All 23 tests pass locally
   ```bash
   python3 tests/run_tests.py
-  # Expected: RESULTS: 32 passed, 0 failed
+  # Expected: RESULTS: 37 passed, 0 failed
   ```
 
 - [ ] No uncommitted changes
@@ -218,7 +218,7 @@ Complete this checklist **before** moving the system to Raspberry Pi 5. This ens
 - [ ] Tests pass in all modes
   ```bash
   python3 tests/run_tests.py
-  # Expected: 32 passed regardless of mode
+  # Expected: 37 passed regardless of mode
   ```
 
 ---

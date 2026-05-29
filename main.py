@@ -13,8 +13,6 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
-import requests
-
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -135,6 +133,7 @@ class CryptoSignalSystem:
         from execution.exit_manager import ExitManager
         from execution.order_executor import OrderExecutor
         from execution.telegram_approver import TelegramApprover
+        from execution.telegram_listener import TelegramApprovalListener
         from execution.exchange_client import BinanceSpotTestnetClient, PaperExchangeClient
 
         self.exchange_client = self._create_exchange_client(BinanceSpotTestnetClient, PaperExchangeClient)
@@ -143,6 +142,7 @@ class CryptoSignalSystem:
         self.exit_manager = ExitManager(self.config)
         self.order_executor = OrderExecutor(self.config, self.exchange_client)
         self.telegram_approver = TelegramApprover(self.config)
+        self.telegram_listener = TelegramApprovalListener(self.config)
 
         # Layer E: Operations & Resilience
         from operations.watchdog import Watchdog
@@ -150,12 +150,14 @@ class CryptoSignalSystem:
         from operations.heartbeat import Heartbeat
         from operations.kill_switch import KillSwitch
         from operations.position_store import PositionStore
+        from operations.pending_trade_store import PendingTradeStore
 
         self.watchdog = Watchdog(self.config)
         self.state_reconciler = StateReconciler(self.config, self.exchange_client)
         self.heartbeat = Heartbeat(self.config)
         self.kill_switch = KillSwitch(self.config)
         self.position_store = PositionStore(self.config)
+        self.pending_trade_store = PendingTradeStore(self.config)
 
         # Layer F: Records & Guarded Learning
         from records.decision_log import DecisionLog
@@ -168,7 +170,9 @@ class CryptoSignalSystem:
 
         # State
         self.positions, self.current_exposure_usd = self.position_store.load()
+        self.pending_trades = self.pending_trade_store.load()
         self.positions_lock = threading.RLock()  # Protect concurrent access to positions
+        self.pending_trades_lock = threading.RLock()
         self.latest_prices = {}
         self.latest_regimes = {}
 
@@ -227,6 +231,7 @@ class CryptoSignalSystem:
         last_collection = 0
         last_volume_scan = 0
         last_exit_check = 0
+        last_approval_check = 0
 
         while self.running:
             now = time.time()
@@ -235,6 +240,10 @@ class CryptoSignalSystem:
             if now - last_exit_check > self.config.EXIT_WATCH_INTERVAL:
                 self._check_exits()
                 last_exit_check = now
+
+            if now - last_approval_check > self.config.TELEGRAM_POLL_INTERVAL_SEC:
+                self._check_pending_approvals()
+                last_approval_check = now
 
             # 5-min collection & analysis loop
             if now - last_collection > self.config.COLLECTOR_INTERVAL:
@@ -374,14 +383,27 @@ class CryptoSignalSystem:
         if approval_id != "auto":
             logger.warning(f"  Trade requires Telegram approval before execution (approval_id: {approval_id})")
             self.decision_log.log_pending_approval(signal, approval_id, approval.get('expires_at', ''))
+            with self.pending_trades_lock:
+                self.pending_trades[approval_id] = {
+                    "signal": signal,
+                    "position_size_usd": position_size,
+                    "requested_price": self.latest_prices.get(coin),
+                    "expires_at": approval.get('expires_at', ''),
+                }
+                self.pending_trade_store.save(self.pending_trades)
+            self.telegram_listener.notify_pending(approval, signal, position_size)
             return
 
-        # Layer D: Execution
+        self._execute_approved_entry(signal, position_size, approval_id)
+
+    def _execute_approved_entry(self, signal: dict, position_size: float, approval_id: str) -> bool:
+        """Execute an approved entry signal and create durable position state."""
+        coin = signal.get('coin')
         current_price = self.latest_prices.get(coin)
         if not current_price:
             logger.warning(f"  No live execution price for {coin}; standing down")
             self.decision_log.log_vetoed(signal, "missing live execution price")
-            return
+            return False
         order = self.order_executor.execute_entry_order(signal, position_size, current_price)
 
         logger.info(f"  Order: {order.get('side')} {order.get('quantity'):.4f} {coin} @ {order.get('price'):.2f}")
@@ -419,6 +441,52 @@ class CryptoSignalSystem:
             self.position_store.save(self.positions, self.current_exposure_usd)
 
         logger.info(f"  Position opened: {position.get('position_id')}")
+        return True
+
+    def _check_pending_approvals(self):
+        """Poll Telegram for approval commands and execute approved pending trades."""
+        for action in self.telegram_listener.poll():
+            approval_id = action.get("approval_id")
+            with self.pending_trades_lock:
+                pending = self.pending_trades.get(approval_id)
+
+            if not pending:
+                self.telegram_listener.notify_result(f"Approval {approval_id} was not found or already handled.")
+                continue
+
+            signal = pending.get("signal", {})
+            if action.get("action") == "reject":
+                with self.pending_trades_lock:
+                    self.pending_trades.pop(approval_id, None)
+                    self.pending_trade_store.save(self.pending_trades)
+                self.decision_log.log_vetoed(signal, f"Telegram rejected approval {approval_id}")
+                self.telegram_listener.notify_result(f"Rejected {approval_id}.")
+                continue
+
+            approved, reason = self.telegram_approver.check_approval(approval_id, signal.get("signal_id", ""))
+            if not approved:
+                with self.pending_trades_lock:
+                    self.pending_trades.pop(approval_id, None)
+                    self.pending_trade_store.save(self.pending_trades)
+                self.decision_log.log_vetoed(signal, f"Telegram approval failed: {reason}")
+                self.telegram_listener.notify_result(f"Approval {approval_id} failed: {reason}.")
+                continue
+
+            try:
+                executed = self._execute_approved_entry(signal, pending.get("position_size_usd", 0), approval_id)
+            except Exception as e:
+                logger.error(f"Approved trade execution failed for {approval_id}: {e}")
+                self.kill_switch.activate(f"approved trade execution failed: {approval_id}")
+                self.telegram_listener.notify_result(f"Execution failed for {approval_id}: {e}")
+                continue
+
+            with self.pending_trades_lock:
+                self.pending_trades.pop(approval_id, None)
+                self.pending_trade_store.save(self.pending_trades)
+            if not executed:
+                self.telegram_listener.notify_result(f"Approval {approval_id} accepted but execution did not run.")
+                continue
+            self.telegram_listener.notify_result(f"Approved and executed {approval_id}.")
 
     def _run_volume_scan(self):
         """Run volume scan (separate, faster loop)."""
@@ -522,6 +590,7 @@ class CryptoSignalSystem:
         if not coin:
             return None
         try:
+            import requests
             symbol = getattr(self.config, "BINANCE_SPOT_SYMBOL_FORMAT", "{}USDT").format(coin)
             response = requests.get(
                 f"{self.config.BINANCE_MARKET_DATA_BASE_URL.rstrip('/')}/api/v3/ticker/price",

@@ -300,7 +300,7 @@ python3 tests/run_tests.py
 ======================================================================
 CRYPTO SIGNAL SYSTEM V3 - TEST SUITE
 ======================================================================
-RESULTS: 32 passed, 0 failed
+RESULTS: 37 passed, 0 failed
 ======================================================================
 ```
 
@@ -569,7 +569,7 @@ Before declaring deployment complete, verify:
 - ✅ Ollama latency < 30s (sentiment analysis)
 - ✅ Binance Testnet orders executing successfully
 - ✅ Tax ledger recording trades correctly
-- ✅ Telegram approvals working (if enabled)
+- ✅ Telegram approvals working with `/approve <id>` and `/reject <id>` (if enabled)
 - ⚠️ Dashboard implementation is not included yet; monitor logs and JSONL records
 
 ### 48+ Hour Stability Test

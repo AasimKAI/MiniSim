@@ -654,6 +654,9 @@ def test_order_executor_exit_failure_raises():
     class Config:
         BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
         TAKER_FEE_PERCENT = 0.1
+        POSITION_SIZE_USD = 100
+        MAX_EXPOSURE_USD = 500
+        LEVERAGE = 1
 
     class FailingClient:
         def execute(self, **kwargs):
@@ -719,6 +722,68 @@ def test_telegram_approver_only_big_trades():
     assert_true(big["approval_id"] != "auto")
 
 
+@test("Telegram Listener: parses authorized approve and reject commands")
+def test_telegram_listener_authorized_commands():
+    class Config:
+        TELEGRAM_ENABLED = True
+        TELEGRAM_BOT_TOKEN = "token"
+        TELEGRAM_CHAT_ID = "123"
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "ok": True,
+                "result": [
+                    {"update_id": 1, "message": {"chat": {"id": 123}, "text": "/approve abc"}},
+                    {"update_id": 2, "message": {"chat": {"id": 123}, "text": "/reject def"}},
+                ],
+            }
+
+        def raise_for_status(self):
+            pass
+
+    class FakeSession:
+        def get(self, url, params, timeout):
+            return FakeResponse()
+
+    from execution.telegram_listener import TelegramApprovalListener
+
+    listener = TelegramApprovalListener(Config(), session=FakeSession())
+    actions = listener.poll()
+
+    assert_equal(actions[0], {"action": "approve", "approval_id": "abc"})
+    assert_equal(actions[1], {"action": "reject", "approval_id": "def"})
+
+
+@test("Telegram Listener: ignores unauthorized chat")
+def test_telegram_listener_ignores_unauthorized_chat():
+    class Config:
+        TELEGRAM_ENABLED = True
+        TELEGRAM_BOT_TOKEN = "token"
+        TELEGRAM_CHAT_ID = "123"
+
+    class FakeResponse:
+        def json(self):
+            return {
+                "ok": True,
+                "result": [
+                    {"update_id": 1, "message": {"chat": {"id": 999}, "text": "/approve abc"}},
+                ],
+            }
+
+        def raise_for_status(self):
+            pass
+
+    class FakeSession:
+        def get(self, url, params, timeout):
+            return FakeResponse()
+
+    from execution.telegram_listener import TelegramApprovalListener
+
+    listener = TelegramApprovalListener(Config(), session=FakeSession())
+    assert_equal(listener.poll(), [])
+
+
 @test("Position Store: persists and restores positions")
 def test_position_store_round_trip():
     import os
@@ -737,6 +802,176 @@ def test_position_store_round_trip():
         loaded_positions, loaded_exposure = store.load()
         assert_equal(loaded_positions["pos_1"]["coin"], "BTC")
         assert_equal(loaded_exposure, 100.0)
+
+
+@test("Pending Trade Store: persists and restores pending trades")
+def test_pending_trade_store_round_trip():
+    import os
+    import tempfile
+    from operations.pending_trade_store import PendingTradeStore
+
+    class Config:
+        STATE_DIR = "state"
+        ATOMIC_WRITE_FSYNC = True
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = PendingTradeStore(Config(), state_file=os.path.join(tmpdir, "pending.json"))
+        pending = {"approval_1": {"signal": {"coin": "BTC"}}}
+        assert_true(store.save(pending))
+
+        loaded = store.load()
+        assert_equal(loaded["approval_1"]["signal"]["coin"], "BTC")
+
+
+@test("System: approved Telegram pending trade executes and clears")
+def test_system_approved_pending_trade_executes():
+    import tempfile
+    from types import SimpleNamespace
+    from main import CryptoSignalSystem
+    from execution.telegram_approver import TelegramApprover
+    from records.decision_log import DecisionLog
+    from operations.position_store import PositionStore
+    from operations.pending_trade_store import PendingTradeStore
+
+    class Config:
+        STATE_DIR = "state"
+        ATOMIC_WRITE_FSYNC = True
+        TAKER_FEE_PERCENT = 0.1
+        POSITION_SIZE_USD = 100
+        MAX_EXPOSURE_USD = 500
+        LEVERAGE = 1
+        BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+        BINANCE_SPOT_SYMBOL_FORMAT = "{}USDT"
+        TRAILING_STOP_PERCENT = 3.0
+        STOP_LOSS_PERCENT = 2.0
+        TAKE_PROFIT_TARGET_1_PERCENT = 5.0
+        TAKE_PROFIT_TARGET_2_PERCENT = 10.0
+        TAKE_PROFIT_TARGET_3_PERCENT = 15.0
+        MAX_HOLD_TIME_HOURS = 48
+        TELEGRAM_ENABLED = True
+        TELEGRAM_APPROVAL_TIMEOUT_SEC = 300
+
+    class Listener:
+        def __init__(self):
+            self.results = []
+
+        def poll(self):
+            return [{"action": "approve", "approval_id": "approval_1"}]
+
+        def notify_result(self, text):
+            self.results.append(text)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        system = object.__new__(CryptoSignalSystem)
+        system.config = Config()
+        system.order_executor = __import__("execution.order_executor", fromlist=["OrderExecutor"]).OrderExecutor(Config())
+        system.risk_manager = __import__("execution.risk_manager", fromlist=["RiskManager"]).RiskManager(Config())
+        system.telegram_approver = TelegramApprover(Config())
+        system.telegram_approver.pending_approvals["approval_1"] = (datetime.now(timezone.utc), "sig_1")
+        system.telegram_listener = Listener()
+        system.decision_log = DecisionLog(Config(), log_file=f"{tmpdir}/decision_log.jsonl")
+        system.position_store = PositionStore(Config(), state_file=f"{tmpdir}/positions.json")
+        system.pending_trade_store = PendingTradeStore(Config(), state_file=f"{tmpdir}/pending.json")
+        system.kill_switch = SimpleNamespace(activate=lambda reason: True)
+        system.positions = {}
+        system.current_exposure_usd = 0.0
+        system.positions_lock = __import__("threading").RLock()
+        system.pending_trades_lock = __import__("threading").RLock()
+        system.latest_prices = {"BTC": 50000.0}
+        system.pending_trades = {
+            "approval_1": {
+                "signal": {
+                    "signal_id": "sig_1",
+                    "coin": "BTC",
+                    "decision": "entry_buy",
+                    "view": "bullish",
+                    "confidence": 0.8,
+                },
+                "position_size_usd": 100,
+            }
+        }
+
+        system._check_pending_approvals()
+
+        assert_equal(system.pending_trades, {})
+        assert_greater(len(system.positions), 0)
+        assert_true(any("executed" in message for message in system.telegram_listener.results))
+
+
+@test("System: approved Telegram trade without live price does not report executed")
+def test_system_approved_pending_trade_without_price_does_not_report_executed():
+    import tempfile
+    from types import SimpleNamespace
+    from main import CryptoSignalSystem
+    from execution.telegram_approver import TelegramApprover
+    from records.decision_log import DecisionLog
+    from operations.position_store import PositionStore
+    from operations.pending_trade_store import PendingTradeStore
+
+    class Config:
+        STATE_DIR = "state"
+        ATOMIC_WRITE_FSYNC = True
+        TAKER_FEE_PERCENT = 0.1
+        POSITION_SIZE_USD = 100
+        MAX_EXPOSURE_USD = 500
+        LEVERAGE = 1
+        BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+        BINANCE_SPOT_SYMBOL_FORMAT = "{}USDT"
+        TRAILING_STOP_PERCENT = 3.0
+        STOP_LOSS_PERCENT = 2.0
+        TAKE_PROFIT_TARGET_1_PERCENT = 5.0
+        TAKE_PROFIT_TARGET_2_PERCENT = 10.0
+        TAKE_PROFIT_TARGET_3_PERCENT = 15.0
+        MAX_HOLD_TIME_HOURS = 48
+        TELEGRAM_ENABLED = True
+        TELEGRAM_APPROVAL_TIMEOUT_SEC = 300
+
+    class Listener:
+        def __init__(self):
+            self.results = []
+
+        def poll(self):
+            return [{"action": "approve", "approval_id": "approval_1"}]
+
+        def notify_result(self, text):
+            self.results.append(text)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        system = object.__new__(CryptoSignalSystem)
+        system.config = Config()
+        system.order_executor = __import__("execution.order_executor", fromlist=["OrderExecutor"]).OrderExecutor(Config())
+        system.risk_manager = __import__("execution.risk_manager", fromlist=["RiskManager"]).RiskManager(Config())
+        system.telegram_approver = TelegramApprover(Config())
+        system.telegram_approver.pending_approvals["approval_1"] = (datetime.now(timezone.utc), "sig_1")
+        system.telegram_listener = Listener()
+        system.decision_log = DecisionLog(Config(), log_file=f"{tmpdir}/decision_log.jsonl")
+        system.position_store = PositionStore(Config(), state_file=f"{tmpdir}/positions.json")
+        system.pending_trade_store = PendingTradeStore(Config(), state_file=f"{tmpdir}/pending.json")
+        system.kill_switch = SimpleNamespace(activate=lambda reason: True)
+        system.positions = {}
+        system.current_exposure_usd = 0.0
+        system.positions_lock = __import__("threading").RLock()
+        system.pending_trades_lock = __import__("threading").RLock()
+        system.latest_prices = {}
+        system.pending_trades = {
+            "approval_1": {
+                "signal": {
+                    "signal_id": "sig_1",
+                    "coin": "BTC",
+                    "decision": "entry_buy",
+                    "view": "bullish",
+                    "confidence": 0.8,
+                },
+                "position_size_usd": 100,
+            }
+        }
+
+        system._check_pending_approvals()
+
+        assert_equal(system.pending_trades, {})
+        assert_equal(len(system.positions), 0)
+        assert_true(any("did not run" in message for message in system.telegram_listener.results))
+        assert_false(any("Approved and executed" in message for message in system.telegram_listener.results))
 
 
 @test("State Reconciler: fails when local position missing on exchange")
@@ -866,6 +1101,8 @@ def run_all_tests():
     test_order_executor_exit_failure_raises()
     test_order_executor_exit_uses_remaining_quantity()
     test_telegram_approver_only_big_trades()
+    test_telegram_listener_authorized_commands()
+    test_telegram_listener_ignores_unauthorized_chat()
     print()
 
     # Run operations tests
@@ -873,6 +1110,9 @@ def run_all_tests():
     test_kill_switch()
     test_heartbeat()
     test_position_store_round_trip()
+    test_pending_trade_store_round_trip()
+    test_system_approved_pending_trade_executes()
+    test_system_approved_pending_trade_without_price_does_not_report_executed()
     test_reconciler_missing_exchange_position_fails()
     print()
 

@@ -27,7 +27,7 @@ The system consists of 6 integrated layers:
 - **Full audit trail:** Decision log, tax ledger (GBP), position snapshots
 - **Schema validation:** All records validated at boundaries
 - **Resilience:** State reconciliation, watchdog monitoring, atomic writes
-- **32 tests:** Core unit and safety-boundary checks
+- **37 tests:** Core unit and safety-boundary checks
 
 ## Installation
 
@@ -129,7 +129,7 @@ MODE = "historical_replay"
 python tests/run_tests.py
 ```
 
-Expected: 32 tests pass, zero failures.
+Expected: 37 tests pass, zero failures.
 
 ### Dashboard
 
@@ -166,6 +166,7 @@ crypto-system/
     exchange_client.py      # Paper and Binance Spot Testnet adapters
     order_executor.py       # Mode-specific order execution
     telegram_approver.py    # Big trade approval
+    telegram_listener.py    # Telegram /approve and /reject polling
   operations/          # Layer E: Operations
     watchdog.py             # Component monitoring
     state_reconciler.py     # Exchange reconciliation
@@ -281,7 +282,8 @@ Big trades (> $1000) are held as pending approval:
 - Approval expires after 5 minutes
 - Nonce prevents reuse
 - Expired/mismatched rejected + logged
-- A Telegram receive loop is still required before pending approvals can be accepted asynchronously
+- Approve with `/approve <approval_id>`
+- Reject with `/reject <approval_id>`
 
 ## Risk Management
 
@@ -368,7 +370,7 @@ Schema Validators:
 ...
 
 ======================================================================
-RESULTS: 32 passed, 0 failed
+RESULTS: 37 passed, 0 failed
 ======================================================================
 ```
 
@@ -554,6 +556,6 @@ For issues:
 ## Version
 
 Crypto Signal System v3.0.0 (May 2026)
-- Complete: 6 layers, 32 tests, explicit paper/testnet adapters
+- Complete: 6 layers, 37 tests, explicit paper/testnet adapters
 - Safer: Schema validation, persistent position state, kill switch
 - Safe: Reconciliation, role-based approvals, honest documentation
