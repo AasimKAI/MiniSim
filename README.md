@@ -1,10 +1,10 @@
-# Crypto Signal System v3
+# Crypto Signal System v4
 
 Cryptocurrency trading signal system with 6 layers, explicit paper/testnet adapters, persistent position state, and safety-first risk controls.
 
 ## Overview
 
-**Status:** v3 safety hardening in progress. Paper mode is self-contained; testnet mode requires real Binance Testnet credentials and will not silently fall back to mock execution.
+**Status:** v4 — backtest engine, multi-exchange CCXT client, and web dashboard added. Paper mode is self-contained; testnet mode requires real Binance Testnet credentials and will not silently fall back to mock execution.
 
 The system consists of 6 integrated layers:
 
@@ -358,7 +358,7 @@ Expected output:
 
 ```
 ======================================================================
-CRYPTO SIGNAL SYSTEM V3 - TEST SUITE
+CRYPTO SIGNAL SYSTEM V4 - TEST SUITE
 ======================================================================
 
 Schema Validators:
@@ -555,7 +555,7 @@ For issues:
 
 ## Version
 
-Crypto Signal System v3.0.0 (May 2026)
+Crypto Signal System v4.0.0 (May 2026)
 - Complete: 6 layers, 37 tests, explicit paper/testnet adapters
 - Safer: Schema validation, persistent position state, kill switch
 - Safe: Reconciliation, role-based approvals, honest documentation

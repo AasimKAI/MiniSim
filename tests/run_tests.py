@@ -1,5 +1,5 @@
 """
-Test runner for Crypto Signal System v3.
+Test runner for Crypto Signal System v4.
 Simple PASS/FAIL helper, no external framework.
 All tests must pass (zero failures).
 """
@@ -1065,7 +1065,7 @@ def test_reflection_analysis():
 def run_all_tests():
     """Run all tests."""
     print("=" * 70)
-    print("CRYPTO SIGNAL SYSTEM V3 - TEST SUITE")
+    print("CRYPTO SIGNAL SYSTEM V4 - TEST SUITE")
     print("=" * 70)
     print()
 

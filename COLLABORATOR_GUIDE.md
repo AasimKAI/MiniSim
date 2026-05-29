@@ -1,6 +1,6 @@
 # Collaborator Instructions
 
-This repository contains the **Crypto Signal System v3** - a production trading system for Raspberry Pi. This document explains how to set up, collaborate, and maintain the system.
+This repository contains the **Crypto Signal System v4** - a production trading system for Raspberry Pi. This document explains how to set up, collaborate, and maintain the system.
 
 ## Access & Permissions
 
@@ -325,7 +325,7 @@ What actually happened?
 ## Environment
 - Python: 3.11
 - OS: Raspberry Pi OS Bookworm
-- Crypto Signal System: v3.0
+- Crypto Signal System: v4.0
 ```
 
 ---
