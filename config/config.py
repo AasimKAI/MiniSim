@@ -126,6 +126,7 @@ DASHBOARD_HOST = "0.0.0.0"   # bind to all interfaces for LAN access on Pi
 DASHBOARD_PORT = 8080
 DASHBOARD_SESSION_HOURS = 24  # how long a Telegram-verified session lasts
 DASHBOARD_EXTERNAL_URL = "http://raspberrypi.local:8080"  # URL sent in Telegram login link
+DASHBOARD_SECURE_COOKIE = False  # set True when serving over HTTPS
 
 # CCXT MULTI-EXCHANGE CLIENT
 CCXT_EXCHANGE = "binance"     # any ccxt exchange id (binance, kraken, coinbase, bybit…)

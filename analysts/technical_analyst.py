@@ -65,16 +65,23 @@ class TechnicalAnalyst:
         }
 
     def _calculate_rsi(self, prices: List[float], period: int) -> Optional[float]:
-        """Calculate RSI."""
+        """Calculate RSI with Wilder smoothing over the full price history."""
         if len(prices) < period + 1:
             return None
         deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
         seed = deltas[:period]
         up = sum(d for d in seed if d > 0) / period
         down = sum(-d for d in seed if d < 0) / period
-        rs = up / down if down != 0 else 0
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
+        # Wilder smoothing: iterate remaining bars so RSI tracks current price
+        for delta in deltas[period:]:
+            gain = max(delta, 0)
+            loss = max(-delta, 0)
+            up = (up * (period - 1) + gain) / period
+            down = (down * (period - 1) + loss) / period
+        if down == 0:
+            return 100.0 if up > 0 else 0.0
+        rs = up / down
+        return 100.0 - (100.0 / (1 + rs))
 
     def _calculate_macd(self, prices: List[float]) -> Optional[float]:
         """Calculate MACD signal."""

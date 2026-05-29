@@ -10,27 +10,23 @@ Flow:
 If Telegram is not configured, dashboard falls back to open access.
 """
 
-import hashlib
 import json
 import logging
-import os
 import secrets
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import requests
-from fastapi import Cookie, Request
+from fastapi import Request
 from fastapi.responses import RedirectResponse
 
 logger = logging.getLogger(__name__)
 
-# In-memory stores (single-process; survived across requests within session)
 _pending_tokens: dict[str, float] = {}   # token -> expiry_epoch
 _active_sessions: dict[str, float] = {}  # session_id -> expiry_epoch
 
-_TOKEN_TTL_SEC = 300       # 5 minutes for one-time login link
+_TOKEN_TTL_SEC = 300
 _SESSION_COOKIE = "minisim_session"
 _SESSIONS_FILE = "state/dashboard_sessions.json"
 
@@ -48,7 +44,6 @@ def _load_sessions():
 def _save_sessions():
     try:
         Path(_SESSIONS_FILE).parent.mkdir(parents=True, exist_ok=True)
-        # Purge expired before saving
         now = time.time()
         live = {k: v for k, v in _active_sessions.items() if v > now}
         Path(_SESSIONS_FILE).write_text(json.dumps(live))
@@ -68,11 +63,8 @@ class DashboardAuth:
         self.bot_token = getattr(config, "TELEGRAM_BOT_TOKEN", None)
         self.chat_id = getattr(config, "TELEGRAM_CHAT_ID", None)
         self.session_hours = getattr(config, "DASHBOARD_SESSION_HOURS", 24)
+        self.secure_cookie = getattr(config, "DASHBOARD_SECURE_COOKIE", False)
         self.external_url = getattr(config, "DASHBOARD_EXTERNAL_URL", "http://localhost:8080").rstrip("/")
-
-    # ------------------------------------------------------------------
-    # Middleware check
-    # ------------------------------------------------------------------
 
     def is_authenticated(self, request: Request) -> bool:
         if not self._auth_required():
@@ -84,57 +76,50 @@ class DashboardAuth:
         return time.time() < expiry
 
     def require_auth(self, request: Request) -> Optional[RedirectResponse]:
-        """Return redirect response if not authenticated, else None."""
         if not self.is_authenticated(request):
             return RedirectResponse(url="/login")
         return None
 
-    # ------------------------------------------------------------------
-    # Login flow
-    # ------------------------------------------------------------------
-
     def request_access(self) -> dict:
-        """
-        Generate a one-time login token and send it via Telegram.
-        Returns {"ok": bool, "message": str}.
-        """
         if not self._auth_required():
             return {"ok": False, "message": "Auth not required (Telegram not configured)."}
 
+        # Prune expired pending tokens before adding a new one
+        global _pending_tokens
+        now = time.time()
+        _pending_tokens = {k: v for k, v in _pending_tokens.items() if v > now}
+
         token = secrets.token_hex(24)
-        _pending_tokens[token] = time.time() + _TOKEN_TTL_SEC
+        _pending_tokens[token] = now + _TOKEN_TTL_SEC
         link = f"{self.external_url}/login/verify?token={token}"
 
         if self.telegram_enabled and self.bot_token and self.chat_id:
             sent = self._send_telegram(
-                f"🔐 MiniSim Dashboard login requested.\n\n"
+                f"MiniSim Dashboard login requested.\n\n"
                 f"Click to authenticate (valid 5 min):\n{link}"
             )
             if sent:
                 return {"ok": True, "message": "Login link sent to Telegram."}
             return {"ok": False, "message": "Failed to send Telegram message. Check bot configuration."}
 
-        # Fallback: log token (development mode)
-        logger.warning(f"Telegram not configured. Login token: {token}")
-        logger.warning(f"Verify URL: {link}")
-        return {"ok": True, "message": "Token logged (Telegram not configured). Check server logs."}
+        # Fallback: log a truncated hint only — never log the full token
+        logger.warning(
+            f"Telegram not configured. Login token prefix: {token[:8]}... "
+            f"(full link written to stdout only)"
+        )
+        print(f"\n[MiniSim Dashboard] Login URL: {link}\n", flush=True)
+        return {"ok": True, "message": "Token printed to server stdout (Telegram not configured)."}
 
     def verify_token(self, token: str) -> Optional[str]:
-        """
-        Validate a one-time token and return a new session_id, or None if invalid.
-        Consumes the token on success.
-        """
         expiry = _pending_tokens.get(token)
         if expiry is None:
             return None
         if time.time() > expiry:
             _pending_tokens.pop(token, None)
             return None
-
-        # Consume token
+        # Consume token (single-use)
         _pending_tokens.pop(token, None)
 
-        # Create session
         session_id = secrets.token_hex(32)
         _active_sessions[session_id] = time.time() + self.session_hours * 3600
         _save_sessions()
@@ -147,11 +132,8 @@ class DashboardAuth:
             max_age=self.session_hours * 3600,
             httponly=True,
             samesite="lax",
+            secure=self.secure_cookie,
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _auth_required(self) -> bool:
         return bool(self.telegram_enabled and self.bot_token and self.chat_id)

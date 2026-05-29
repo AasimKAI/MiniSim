@@ -30,6 +30,8 @@ _TIMEFRAME_MS = {
     "1w": 604_800_000,
 }
 
+_MAX_DOWNLOAD_RETRIES = 5
+
 
 class OHLCFetcher:
     """Fetch and cache OHLCV bars from a CCXT exchange."""
@@ -96,14 +98,31 @@ class OHLCFetcher:
         cached = self._load_cache(cache_path)
         cached_ts = {b[0] for b in cached}
 
-        # Determine what range we still need to download
-        need_since = warmup_start_ms
         if cached:
             latest_cached_ts = max(b[0] for b in cached)
-            if latest_cached_ts >= end_ms - tf_ms:
-                # Cache covers everything — just filter and return
+            earliest_cached_ts = min(b[0] for b in cached)
+            tail_covered = latest_cached_ts >= end_ms - tf_ms
+            head_covered = earliest_cached_ts <= warmup_start_ms
+
+            if tail_covered and head_covered:
                 return self._filter(cached, warmup_start_ms, end_ms)
+
+            # Cache covers the tail but not the warmup head — fetch backward gap
+            if tail_covered and not head_covered:
+                gap_bars = self._download(symbol, timeframe, warmup_start_ms, earliest_cached_ts - 1, tf_ms)
+                fresh = [b for b in gap_bars if b[0] not in cached_ts]
+                if fresh:
+                    # Prepend: rewrite the cache file in sorted order
+                    all_bars = sorted(cached + fresh, key=lambda b: b[0])
+                    cache_path.write_text("")
+                    self._append_cache(cache_path, all_bars)
+                    cached = all_bars
+                return self._filter(cached, warmup_start_ms, end_ms)
+
+            # Tail not covered — fetch forward from latest cached bar
             need_since = latest_cached_ts + tf_ms
+        else:
+            need_since = warmup_start_ms
 
         logger.info(
             f"Fetching {symbol} {timeframe} from {self._ms_to_iso(need_since)} "
@@ -129,12 +148,20 @@ class OHLCFetcher:
         batch = 500
 
         while cursor < end_ms:
-            try:
-                bars = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=batch)
-            except Exception as e:
-                logger.error(f"CCXT fetch error: {e}")
-                time.sleep(2)
-                continue
+            retry = 0
+            while retry < _MAX_DOWNLOAD_RETRIES:
+                try:
+                    bars = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=cursor, limit=batch)
+                    break
+                except Exception as e:
+                    retry += 1
+                    wait = 2 ** retry
+                    logger.error(f"CCXT fetch error (attempt {retry}/{_MAX_DOWNLOAD_RETRIES}): {e}")
+                    if retry >= _MAX_DOWNLOAD_RETRIES:
+                        raise RuntimeError(
+                            f"CCXT fetch failed after {_MAX_DOWNLOAD_RETRIES} retries: {e}"
+                        ) from e
+                    time.sleep(wait)
 
             if not bars:
                 break
@@ -148,15 +175,13 @@ class OHLCFetcher:
 
     @staticmethod
     def _filter(bars: List[Bar], since_ms: int, end_ms: int) -> List[Bar]:
-        filtered = sorted(
+        return sorted(
             (b for b in bars if since_ms <= b[0] <= end_ms),
             key=lambda b: b[0],
         )
-        return filtered
 
     @staticmethod
     def _parse_date_ms(date_str: str) -> int:
-        """Parse YYYY-MM-DD to millisecond epoch."""
         dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         return int(dt.timestamp() * 1000)
 

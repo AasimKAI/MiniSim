@@ -175,6 +175,12 @@ class CryptoSignalSystem:
         self.pending_trades_lock = threading.RLock()
         self.latest_prices = {}
         self.latest_regimes = {}
+        # TTL cache for spot price lookups (coin → (price, fetched_at_epoch))
+        self._price_cache: dict = {}
+        self._price_cache_ttl: float = 60.0
+        # TTL cache for USD/GBP FX rate (fetched at most once per 10 min)
+        self._fx_rate_cache: Optional[float] = None
+        self._fx_rate_fetched_at: float = 0.0
 
         # Layer G: Backtest runner (shares config; instantiated here so dashboard can access it)
         from backtest.backtest_runner import BacktestRunner
@@ -188,6 +194,9 @@ class CryptoSignalSystem:
             return binance_client_cls(self.config)
         if self.mode in ["fixture", "historical_replay", "paper"]:
             return paper_client_cls()
+        if self.mode == "ccxt":
+            from execution.ccxt_exchange_client import CCXTExchangeClient
+            return CCXTExchangeClient(self.config)
         raise ValueError(f"Unsupported mode: {self.mode}")
 
     def start(self):
@@ -568,8 +577,11 @@ class CryptoSignalSystem:
                     exit_order.get('exit_price', 0)
                 )
 
-                # Record for tax
-                self.tax_ledger.record_trade(exit_exec, price_gbp=40000, fx_rate=1.25)
+                # Record for tax (convert USD price to GBP using cached FX rate)
+                usd_price = exit_order.get("exit_price", 0) or self.latest_prices.get(position.get("coin"), 0)
+                fx_rate = self._get_usd_gbp_rate()
+                price_gbp = usd_price / fx_rate if fx_rate > 0 else 0
+                self.tax_ledger.record_trade(exit_exec, price_gbp=price_gbp, fx_rate=fx_rate)
 
     def _coin_feed_item(self, clean_data: dict, feed_name: str, coin: str) -> Optional[dict]:
         items = clean_data.get("feeds", {}).get(feed_name, {}).get("items", [])
@@ -598,6 +610,10 @@ class CryptoSignalSystem:
     def _get_fresh_price(self, coin: str) -> Optional[float]:
         if not coin:
             return None
+        # Return cached value if still fresh (avoids blocking the exit loop on every iteration)
+        cached_price, cached_at = self._price_cache.get(coin, (None, 0.0))
+        if cached_price and (time.time() - cached_at) < self._price_cache_ttl:
+            return cached_price
         try:
             import requests
             symbol = getattr(self.config, "BINANCE_SPOT_SYMBOL_FORMAT", "{}USDT").format(coin)
@@ -610,10 +626,32 @@ class CryptoSignalSystem:
             price = float(response.json().get("price", 0))
             if price > 0:
                 self.latest_prices[coin] = price
+                self._price_cache[coin] = (price, time.time())
                 return price
         except Exception as e:
             logger.warning(f"Fresh price lookup failed for {coin}: {e}")
         return None
+
+    def _get_usd_gbp_rate(self) -> float:
+        """Return USD/GBP exchange rate, cached for 10 minutes. Falls back to 0.79."""
+        now = time.time()
+        if self._fx_rate_cache and (now - self._fx_rate_fetched_at) < 600:
+            return self._fx_rate_cache
+        try:
+            import requests
+            r = requests.get(
+                "https://api.exchangerate-api.com/v4/latest/USD",
+                timeout=5,
+            )
+            r.raise_for_status()
+            rate = float(r.json().get("rates", {}).get("GBP", 0))
+            if rate > 0:
+                self._fx_rate_cache = rate
+                self._fx_rate_fetched_at = now
+                return rate
+        except Exception as e:
+            logger.warning(f"FX rate lookup failed: {e}")
+        return self._fx_rate_cache or 0.79
 
     def _signal_handler(self, signum, frame):
         """Handle interrupt signals."""

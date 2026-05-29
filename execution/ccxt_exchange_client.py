@@ -33,6 +33,8 @@ class CCXTExchangeClient:
                 "sandbox": getattr(config, "CCXT_SANDBOX", False),
             }
         )
+        # Maps clientOrderId → exchange order_id to avoid O(n) scan in get_order()
+        self._order_id_map: Dict[str, str] = {}
         logger.info(f"CCXTExchangeClient initialized: {exchange_id}")
 
     # ------------------------------------------------------------------
@@ -48,13 +50,27 @@ class CCXTExchangeClient:
                 amount=quantity,
                 params={"clientOrderId": client_order_id},
             )
-            return self._normalize(order, fallback_price=price)
+            normalized = self._normalize(order, fallback_price=price)
+            # Store mapping so get_order() can fetch directly by exchange ID
+            if normalized.get("order_id"):
+                self._order_id_map[client_order_id] = normalized["order_id"]
+            return normalized
         except Exception as e:
             logger.error(f"CCXT execute error [{symbol} {side}]: {e}")
             raise
 
     def get_order(self, symbol: str, client_order_id: str) -> Dict:
         """Fetch order by client order ID."""
+        # Fast path: direct lookup by exchange order_id
+        exchange_id = self._order_id_map.get(client_order_id)
+        if exchange_id:
+            try:
+                order = self.exchange.fetch_order(exchange_id, symbol)
+                return self._normalize(order)
+            except Exception as e:
+                logger.warning(f"CCXT fetch_order({exchange_id}) failed, falling back to scan: {e}")
+
+        # Fallback: scan order history (slow — only if mapping is missing)
         try:
             orders = self.exchange.fetch_orders(symbol)
             for o in orders:
@@ -70,13 +86,13 @@ class CCXTExchangeClient:
         try:
             balance = self.exchange.fetch_balance()
             positions = []
+            quote = getattr(self.config, "CCXT_QUOTE_CURRENCY", "USDT")
             for asset, amounts in balance.items():
                 if asset in ("info", "free", "used", "total"):
                     continue
                 if not isinstance(amounts, dict):
                     continue
                 total = float(amounts.get("total") or 0)
-                quote = getattr(self.config, "CCXT_QUOTE_CURRENCY", "USDT")
                 if asset != quote and total > 0:
                     positions.append(
                         {"coin": asset, "side": "LONG", "exchange_quantity": total}

@@ -10,7 +10,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Generator, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from backtest.llm_cache import LLMCache
 from backtest.metrics import calculate as calc_metrics
@@ -18,6 +18,22 @@ from backtest.ohlc_fetcher import OHLCFetcher
 from backtest.signal_replayer import SignalReplayer
 
 logger = logging.getLogger(__name__)
+
+
+class _NeutralAnalyst:
+    """Stub analyst returning neutral verdicts when an analyst is disabled by config."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def analyze(self, *args, **kwargs) -> Dict:
+        return {
+            "analyst": self._name,
+            "view": "neutral",
+            "confidence": 0.0,
+            "status": "disabled",
+            "reasoning": "analyst disabled in BACKTEST_ANALYSTS_ENABLED",
+        }
 
 
 class BacktestRunner:
@@ -132,7 +148,6 @@ class BacktestRunner:
                                 }
                             )
 
-                    # Write event
                     ef.write(json.dumps({
                         "bar_index": event["bar_index"],
                         "timestamp": event["timestamp"],
@@ -156,7 +171,23 @@ class BacktestRunner:
 
             # --- Metrics ---
             llm_stats = llm_cache.stats if llm_cache else {"hits": 0, "misses": 0, "hit_rate": 0.0}
-            metrics = calc_metrics(trades)
+            metrics = calc_metrics(trades, start_date=start_date, end_date=end_date)
+
+            # Mark suspect if too many LLM calls failed (results may be unreliable)
+            final_status = "completed"
+            if replayer.llm_failure_rate > 0.5:
+                final_status = "suspect"
+                logger.warning(
+                    f"[{run_id}] LLM failure rate {replayer.llm_failure_rate:.0%} — "
+                    "results marked suspect"
+                )
+
+            # events.jsonl served streaming only; discard after metrics are computed
+            try:
+                event_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
             summary = {
                 "run_id": run_id,
                 "coin": coin,
@@ -165,15 +196,16 @@ class BacktestRunner:
                 "start_date": start_date,
                 "end_date": end_date,
                 "total_bars": bars_processed,
-                "llm_calls": llm_stats["hits"] + llm_stats["misses"],
+                "llm_calls": replayer.llm_attempt_count,
+                "llm_failure_rate": round(replayer.llm_failure_rate, 3),
                 "llm_cache_hit_rate": round(llm_stats["hit_rate"], 3),
-                "status": "completed",
+                "status": final_status,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "completed_at": datetime.now(timezone.utc).isoformat(),
                 **{k: v for k, v in metrics.items() if k != "equity_curve"},
             }
             (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-            self._upsert_index(run_id, coin, exchange, timeframe, start_date, end_date, "completed", metrics, llm_stats)
+            self._upsert_index(run_id, coin, exchange, timeframe, start_date, end_date, final_status, metrics, llm_stats)
 
             logger.info(
                 f"[{run_id}] Backtest complete: "
@@ -234,10 +266,22 @@ class BacktestRunner:
         from decision.researcher import BullResearcher, BearResearcher
         from decision.ceo_agent import CEOAgent
 
+        enabled = getattr(self.config, "BACKTEST_ANALYSTS_ENABLED", {})
+        tech = (
+            TechnicalAnalyst(self.config)
+            if enabled.get("technical", True)
+            else _NeutralAnalyst("technical")
+        )
+        vol = (
+            VolumeAnalyst(self.config)
+            if enabled.get("volume", True)
+            else _NeutralAnalyst("volume")
+        )
+
         return SignalReplayer(
             coin=coin,
-            technical_analyst=TechnicalAnalyst(self.config),
-            volume_analyst=VolumeAnalyst(self.config),
+            technical_analyst=tech,
+            volume_analyst=vol,
             regime_detector=RegimeDetector(self.config),
             regime_filter=RegimeFilter(self.config),
             bull_researcher=BullResearcher(self.config),
@@ -252,7 +296,7 @@ class BacktestRunner:
         coin = signal["coin"]
         side = "LONG" if signal["decision"] == "entry_buy" else "SHORT"
         qty = size / price if price > 0 else 0
-        coid = f"bt_{signal.get('signal_id', uuid.uuid4())[:8]}_entry"
+        coid = f"bt_{signal.get('signal_id', str(uuid.uuid4()))[:8]}_entry"
         paper.execute(f"{coin}/USDT", side, qty, price, coid)
         return {
             "position_id": f"pos_{coid}",
@@ -271,14 +315,19 @@ class BacktestRunner:
     def _close_position(self, position: Dict, exit_order: Dict, price: float, paper) -> Dict:
         coin = position["coin"]
         qty = position.get("remaining_quantity", 0)
+        side = position["side"]
+
+        # Apply slippage: selling (LONG exit) gets a lower price; buying back (SHORT exit) costs more
+        slip = getattr(self.config, "SLIPPAGE_PERCENT", 0.05) / 100
+        exit_price = price * (1 - slip) if side == "LONG" else price * (1 + slip)
+
         coid = f"bt_{position['position_id'][:8]}_exit"
-        paper.execute(f"{coin}/USDT", "SELL", qty, price, coid)
+        paper.execute(f"{coin}/USDT", "SELL", qty, exit_price, coid)
 
         entry = position["entry_price"]
-        side = position["side"]
-        raw_pnl = (price - entry) * qty if side == "LONG" else (entry - price) * qty
+        raw_pnl = (exit_price - entry) * qty if side == "LONG" else (entry - exit_price) * qty
         fee_pct = getattr(self.config, "TAKER_FEE_PERCENT", 0.1) / 100
-        fees = (entry * qty + price * qty) * fee_pct
+        fees = (entry * qty + exit_price * qty) * fee_pct
         pnl = raw_pnl - fees
         pnl_pct = pnl / (entry * qty) * 100 if entry * qty > 0 else 0
 
@@ -287,7 +336,7 @@ class BacktestRunner:
             "coin": coin,
             "side": side,
             "entry_price": entry,
-            "exit_price": price,
+            "exit_price": round(exit_price, 6),
             "quantity": qty,
             "pnl_usd": round(pnl, 4),
             "pnl_pct": round(pnl_pct, 2),
@@ -353,7 +402,9 @@ class BacktestRunner:
             )
 
     def _db(self) -> sqlite3.Connection:
-        return sqlite3.connect(str(self.index_db), timeout=10)
+        conn = sqlite3.connect(str(self.index_db), timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
 
     @staticmethod
     def _run_schema():

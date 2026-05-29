@@ -1,10 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Run {{ summary.run_id }}{% endblock %}
+{% block title %}Run {{ summary.run_id or "—" }}{% endblock %}
 {% block content %}
-<h2>Backtest: {{ summary.coin }} {{ summary.timeframe }}
-  <span class="muted">{{ summary.start_date }} → {{ summary.end_date }}</span>
+<h2>Backtest: {{ summary.coin or "?" }} {{ summary.timeframe or "" }}
+  <span class="muted">{{ summary.start_date or "" }} → {{ summary.end_date or "" }}</span>
 </h2>
 <p><a href="/backtest/results">← All results</a></p>
+
+{% if summary.run_id %}
+{% if summary.status == "suspect" %}
+<div class="alert alert-err">Results marked <strong>suspect</strong> — LLM failure rate was &gt;50%. Decisions may be unreliable.</div>
+{% endif %}
 
 <div class="stat-row">
   <div class="stat">
@@ -34,6 +39,9 @@
     <span class="stat-value">{{ "%.0f" % (summary.llm_cache_hit_rate * 100) }}%</span>
   </div>
 </div>
+{% else %}
+<p class="muted">Run is still in progress or failed to complete. Check the results list for status.</p>
+{% endif %}
 
 {% if equity_curve_json and equity_curve_json != "[]" %}
 <div class="card">
