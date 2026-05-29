@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CRYPTO SIGNAL SYSTEM V2 - MAIN ENTRY POINT
+CRYPTO SIGNAL SYSTEM V3 - MAIN ENTRY POINT
 Orchestrates 6 layers: Data, Analysis, Decision, Execution, Operations, Records.
 Supports modes: fixture, historical_replay, paper, testnet.
 """
@@ -39,7 +39,7 @@ class CryptoSignalSystem:
         self._validate_config()
 
         self.mode = self.config.MODE
-        logger.info(f"CryptoSignalSystem v2 initializing in mode: {self.mode}")
+        logger.info(f"CryptoSignalSystem v3 initializing in mode: {self.mode}")
 
         # Initialize all components
         self._init_layers()
@@ -170,7 +170,7 @@ class CryptoSignalSystem:
 
     def start(self):
         """Start system."""
-        logger.info(f"Starting Crypto Signal System v2 in {self.mode} mode...")
+        logger.info(f"Starting Crypto Signal System v3 in {self.mode} mode...")
 
         if self.mode not in ["fixture", "historical_replay", "paper", "testnet"]:
             logger.error(f"Invalid mode: {self.mode}. Use: fixture, historical_replay, paper, testnet")
@@ -491,7 +491,7 @@ class CryptoSignalSystem:
 
     def stop(self):
         """Stop system."""
-        logger.info("Stopping Crypto Signal System v2...")
+        logger.info("Stopping Crypto Signal System v3...")
         self.running = False
 
 

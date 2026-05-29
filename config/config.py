@@ -1,5 +1,5 @@
 """
-Configuration for Crypto Signal System v2.
+Configuration for Crypto Signal System v3.
 All settings centralized here. Secrets loaded from secrets.py.
 """
 

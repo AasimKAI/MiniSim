@@ -1,4 +1,4 @@
-# Crypto Signal System v2 - Dependencies
+# Crypto Signal System v3 - Dependencies
 
 # API & HTTP
 requests>=2.28.0

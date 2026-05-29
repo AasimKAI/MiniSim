@@ -1,6 +1,6 @@
-# Crypto Signal System v2 - Raspberry Pi Deployment Guide
+# Crypto Signal System v3 - Raspberry Pi Deployment Guide
 
-Complete step-by-step instructions for deploying the Crypto Signal System v2 to a Raspberry Pi 5.
+Complete step-by-step instructions for deploying the Crypto Signal System v3 to a Raspberry Pi 5.
 
 ## Prerequisites
 
@@ -298,7 +298,7 @@ python3 tests/run_tests.py
 **Expected output:**
 ```
 ======================================================================
-CRYPTO SIGNAL SYSTEM V2 - TEST SUITE
+CRYPTO SIGNAL SYSTEM V3 - TEST SUITE
 ======================================================================
 RESULTS: 23 passed, 0 failed
 ======================================================================
@@ -391,10 +391,10 @@ python3 main.py
 
 **Expected output:**
 ```
-2026-05-29 10:30:00 - __main__ - INFO - CryptoSignalSystem v2 initializing in mode: testnet
+2026-05-29 10:30:00 - __main__ - INFO - CryptoSignalSystem v3 initializing in mode: testnet
 2026-05-29 10:30:00 - __main__ - INFO - Initializing layers...
 2026-05-29 10:30:00 - __main__ - INFO - All layers initialized successfully
-2026-05-29 10:30:00 - __main__ - INFO - Starting Crypto Signal System v2 in testnet mode...
+2026-05-29 10:30:00 - __main__ - INFO - Starting Crypto Signal System v3 in testnet mode...
 2026-05-29 10:30:00 - operations.state_reconciler - INFO - Starting state reconciliation...
 2026-05-29 10:30:00 - __main__ - INFO - System started. Running analysis/exit loops...
 2026-05-29 10:30:05 - collector.collector - INFO - Collecting from coingecko...
@@ -420,7 +420,7 @@ Paste this:
 
 ```ini
 [Unit]
-Description=Crypto Signal System v2
+Description=Crypto Signal System v3
 After=network.target
 
 [Service]
@@ -452,7 +452,7 @@ sudo systemctl status crypto-signal
 
 **Expected output:**
 ```
-● crypto-signal.service - Crypto Signal System v2
+● crypto-signal.service - Crypto Signal System v3
      Loaded: loaded (/etc/systemd/system/crypto-signal.service)
      Active: active (running) since Wed 2026-05-29 10:35:00 UTC
 ```

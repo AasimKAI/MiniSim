@@ -1,4 +1,4 @@
-# Crypto Signal System v2
+# Crypto Signal System v3
 
 Production-ready cryptocurrency trading signal system with 6 layers, 200+ tests, and comprehensive risk management.
 
@@ -360,7 +360,7 @@ Expected output:
 
 ```
 ======================================================================
-CRYPTO SIGNAL SYSTEM V2 - TEST SUITE
+CRYPTO SIGNAL SYSTEM V3 - TEST SUITE
 ======================================================================
 
 Schema Validators:
@@ -560,7 +560,7 @@ For issues:
 
 ## Version
 
-Crypto Signal System v2.0.0 (May 2026)
+Crypto Signal System v3.0.0 (May 2026)
 - Complete: 6 layers, 50+ tests, testnet-only
 - Production-ready: Schema validation, atomic writes, kill switch
 - Safe: Reconciliation, role-based approvals, honest documentation
