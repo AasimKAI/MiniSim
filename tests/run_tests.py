@@ -610,6 +610,28 @@ def test_heartbeat():
     assert_true(is_healthy)
 
 
+@test("Dashboard Auth: denies access when Telegram is not configured")
+def test_dashboard_auth_denies_without_telegram():
+    from types import SimpleNamespace
+    from dashboard.auth import DashboardAuth
+
+    class Config:
+        TELEGRAM_ENABLED = True
+        TELEGRAM_BOT_TOKEN = None
+        TELEGRAM_CHAT_ID = None
+        DASHBOARD_SESSION_HOURS = 24
+        DASHBOARD_SECURE_COOKIE = False
+        DASHBOARD_EXTERNAL_URL = "http://localhost:8080"
+
+    auth = DashboardAuth(Config())
+    request = SimpleNamespace(cookies={})
+
+    assert_false(auth.is_authenticated(request))
+    result = auth.request_access()
+    assert_false(result["ok"])
+    assert_true("not configured" in result["message"])
+
+
 # ============================================================================
 # ORDER EXECUTOR TESTS
 # ============================================================================
@@ -701,6 +723,81 @@ def test_order_executor_exit_uses_remaining_quantity():
 
     order = oe.execute_exit_order(position, exit_condition, current_price=49000)
     assert_equal(order["quantity"], 0.1)
+
+
+@test("Order Executor: CCXT mode uses slash symbol")
+def test_order_executor_ccxt_symbol_format():
+    class Config:
+        MODE = "ccxt"
+        BINANCE_TESTNET_BASE_URL = "https://testnet.binance.vision"
+        TAKER_FEE_PERCENT = 0.1
+        CCXT_QUOTE_CURRENCY = "USDT"
+
+    class RecordingClient:
+        def __init__(self):
+            self.symbol = None
+
+        def execute(self, **kwargs):
+            self.symbol = kwargs["symbol"]
+            return {
+                "order_id": "order_1",
+                "status": "filled",
+                "filled_quantity": kwargs["quantity"],
+                "filled_price": kwargs["price"],
+            }
+
+    from execution.order_executor import OrderExecutor
+
+    client = RecordingClient()
+    oe = OrderExecutor(Config(), binance_client=client)
+    signal = {"signal_id": "sig_123", "coin": "BTC", "decision": "entry_buy"}
+
+    oe.execute_entry_order(signal, position_size_usd=100, current_price=50000)
+
+    assert_equal(client.symbol, "BTC/USDT")
+
+
+@test("System: unfilled entry does not create phantom position")
+def test_system_unfilled_entry_does_not_create_position():
+    from types import SimpleNamespace
+    from main import CryptoSignalSystem
+
+    class FakeExecutor:
+        def execute_entry_order(self, signal, position_size, current_price):
+            return {
+                "side": "BUY",
+                "quantity": 0.1,
+                "price": current_price,
+                "status": "failed",
+                "filled_quantity": 0,
+            }
+
+    events = []
+    system = object.__new__(CryptoSignalSystem)
+    system.latest_prices = {"BTC": 50000.0}
+    system.order_executor = FakeExecutor()
+    system.decision_log = SimpleNamespace(
+        log_vetoed=lambda signal, reason: events.append(("vetoed", reason)),
+        log_approved=lambda signal, approval_id: events.append(("approved", approval_id)),
+        log_executed=lambda signal, order_id, price: events.append(("executed", order_id)),
+    )
+    system.kill_switch = SimpleNamespace(activate=lambda reason: events.append(("kill", reason)))
+    system.positions = {}
+    system.current_exposure_usd = 0.0
+    system.positions_lock = __import__("threading").RLock()
+    system.position_store = SimpleNamespace(save=lambda positions, exposure: True)
+    system.risk_manager = SimpleNamespace(calculate_exit_plan=lambda price, coin, signal: {})
+
+    executed = system._execute_approved_entry(
+        {"signal_id": "sig_123", "coin": "BTC", "decision": "entry_buy"},
+        100,
+        "auto",
+    )
+
+    assert_false(executed)
+    assert_equal(system.positions, {})
+    assert_true(any(event[0] == "kill" for event in events))
+    assert_false(any(event[0] == "approved" for event in events))
 
 
 @test("Telegram Approver: only big trades require approval")
@@ -1100,6 +1197,8 @@ def run_all_tests():
     test_paper_exchange_client()
     test_order_executor_exit_failure_raises()
     test_order_executor_exit_uses_remaining_quantity()
+    test_order_executor_ccxt_symbol_format()
+    test_system_unfilled_entry_does_not_create_position()
     test_telegram_approver_only_big_trades()
     test_telegram_listener_authorized_commands()
     test_telegram_listener_ignores_unauthorized_chat()
@@ -1109,6 +1208,7 @@ def run_all_tests():
     print("Operations:")
     test_kill_switch()
     test_heartbeat()
+    test_dashboard_auth_denies_without_telegram()
     test_position_store_round_trip()
     test_pending_trade_store_round_trip()
     test_system_approved_pending_trade_executes()

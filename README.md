@@ -27,7 +27,7 @@ The system consists of 6 integrated layers:
 - **Full audit trail:** Decision log, tax ledger (GBP), position snapshots
 - **Schema validation:** All records validated at boundaries
 - **Resilience:** State reconciliation, watchdog monitoring, atomic writes
-- **37 tests:** Core unit and safety-boundary checks
+- **40 tests:** Core unit and safety-boundary checks
 
 ## Installation
 
@@ -61,7 +61,7 @@ python main.py
 
 All settings centralized in `config/config.py`. Update as needed:
 
-- **MODE:** fixture | historical_replay | paper | testnet (default: testnet)
+- **MODE:** fixture | historical_replay | paper | testnet | ccxt (default: testnet)
 - **TRACKED_COINS:** ["BTC", "ETH", "XRP", "ADA", "SOL"]
 - **COLLECTOR_INTERVAL:** 300 (5 minutes)
 - **VOLUME_SCAN_INTERVAL:** 45 (30-60 seconds)
@@ -129,11 +129,11 @@ MODE = "historical_replay"
 python tests/run_tests.py
 ```
 
-Expected: 37 tests pass, zero failures.
+Expected: 40 tests pass, zero failures.
 
 ### Dashboard
 
-Dashboard settings are present in config, but the dashboard implementation is not included yet. Use logs, `data/decision_log.jsonl`, `data/tax_ledger.jsonl`, and `state/positions.json` for monitoring.
+The dashboard is implemented but disabled by default. Enable it only after Telegram auth is configured; otherwise it denies access.
 
 ## Architecture
 
@@ -370,7 +370,7 @@ Schema Validators:
 ...
 
 ======================================================================
-RESULTS: 37 passed, 0 failed
+RESULTS: 40 passed, 0 failed
 ======================================================================
 ```
 
@@ -556,6 +556,6 @@ For issues:
 ## Version
 
 Crypto Signal System v4.0.0 (May 2026)
-- Complete: 6 layers, 37 tests, explicit paper/testnet adapters
+- Complete: 6 layers, 40 tests, explicit paper/testnet/CCXT adapters
 - Safer: Schema validation, persistent position state, kill switch
 - Safe: Reconciliation, role-based approvals, honest documentation

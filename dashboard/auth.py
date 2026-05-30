@@ -7,7 +7,7 @@ Flow:
   3. User clicks link in Telegram → session cookie set → redirect to /
   4. Session cookie valid for DASHBOARD_SESSION_HOURS (default 24h)
 
-If Telegram is not configured, dashboard falls back to open access.
+If Telegram is not configured, dashboard denies access by default.
 """
 
 import json
@@ -17,7 +17,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import requests
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 
@@ -68,7 +67,7 @@ class DashboardAuth:
 
     def is_authenticated(self, request: Request) -> bool:
         if not self._auth_required():
-            return True
+            return False
         session_id = request.cookies.get(_SESSION_COOKIE)
         if not session_id:
             return False
@@ -82,7 +81,7 @@ class DashboardAuth:
 
     def request_access(self) -> dict:
         if not self._auth_required():
-            return {"ok": False, "message": "Auth not required (Telegram not configured)."}
+            return {"ok": False, "message": "Dashboard auth is not configured. Set Telegram bot token and chat ID."}
 
         # Prune expired pending tokens before adding a new one
         global _pending_tokens
@@ -102,13 +101,7 @@ class DashboardAuth:
                 return {"ok": True, "message": "Login link sent to Telegram."}
             return {"ok": False, "message": "Failed to send Telegram message. Check bot configuration."}
 
-        # Fallback: log a truncated hint only — never log the full token
-        logger.warning(
-            f"Telegram not configured. Login token prefix: {token[:8]}... "
-            f"(full link written to stdout only)"
-        )
-        print(f"\n[MiniSim Dashboard] Login URL: {link}\n", flush=True)
-        return {"ok": True, "message": "Token printed to server stdout (Telegram not configured)."}
+        return {"ok": False, "message": "Dashboard auth is not configured. Set Telegram bot token and chat ID."}
 
     def verify_token(self, token: str) -> Optional[str]:
         expiry = _pending_tokens.get(token)
@@ -140,6 +133,7 @@ class DashboardAuth:
 
     def _send_telegram(self, text: str) -> bool:
         try:
+            import requests
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
             r = requests.post(url, json={"chat_id": self.chat_id, "text": text}, timeout=10)
             return r.status_code == 200

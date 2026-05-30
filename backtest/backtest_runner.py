@@ -168,6 +168,8 @@ class BacktestRunner:
                 fake_exit = {"trigger": "end_of_backtest", "quantity_percent": 100, "exit_price": last_close}
                 trade = self._close_position(open_position, fake_exit, last_close, paper)
                 trades.append(trade)
+                with open(trade_file, "a") as tf:
+                    tf.write(json.dumps(trade) + "\n")
 
             # --- Metrics ---
             llm_stats = llm_cache.stats if llm_cache else {"hits": 0, "misses": 0, "hit_rate": 0.0}

@@ -42,11 +42,13 @@ class OrderExecutor:
         signal_id = signal.get('signal_id', str(uuid.uuid4()))
         client_order_id = f"{signal_id}/entry"
 
+        symbol = self._format_symbol(coin)
+
         # Execute on exchange (mock or real)
         if self.binance_client:
             try:
                 exchange_order = self.binance_client.execute(
-                    symbol=f"{coin}USDT",
+                    symbol=symbol,
                     side=side,
                     quantity=quantity,
                     price=current_price,
@@ -60,7 +62,7 @@ class OrderExecutor:
                     # Try to fetch existing order from exchange
                     try:
                         exchange_order = self.binance_client.get_order(
-                            symbol=f"{coin}USDT",
+                            symbol=symbol,
                             client_order_id=client_order_id,
                         )
                         logger.info(f"Retrieved existing order: {exchange_order}")
@@ -117,11 +119,13 @@ class OrderExecutor:
         signal_id = position.get('signal_id', str(uuid.uuid4()))
         client_order_id = f"{signal_id}/exit/{exit_condition.get('trigger', 'unknown')}"
 
+        symbol = self._format_symbol(coin)
+
         # Execute
         if self.binance_client:
             try:
                 exchange_order = self.binance_client.execute(
-                    symbol=f"{coin}USDT",
+                    symbol=symbol,
                     side=exit_side,
                     quantity=quantity,
                     price=current_price,
@@ -164,6 +168,16 @@ class OrderExecutor:
             "filled_quantity": quantity,
             "filled_price": price,
         }
+
+    def _format_symbol(self, coin: str) -> str:
+        explicit_format = getattr(self.config, "EXCHANGE_SYMBOL_FORMAT", None)
+        if explicit_format:
+            return explicit_format.format(coin)
+        if getattr(self.config, "MODE", "") == "ccxt":
+            quote = getattr(self.config, "CCXT_QUOTE_CURRENCY", "USDT")
+            return f"{coin}/{quote}"
+        symbol_format = getattr(self.config, "BINANCE_SPOT_SYMBOL_FORMAT", "{}USDT")
+        return symbol_format.format(coin)
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()

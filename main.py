@@ -74,8 +74,8 @@ class CryptoSignalSystem:
             raise ValueError(f"Missing required config fields: {', '.join(missing)}")
 
         # Validate MODE is valid
-        if self.config.MODE not in ["fixture", "historical_replay", "paper", "testnet"]:
-            raise ValueError(f"Invalid MODE: {self.config.MODE}. Must be one of: fixture, historical_replay, paper, testnet")
+        if self.config.MODE not in ["fixture", "historical_replay", "paper", "testnet", "ccxt"]:
+            raise ValueError(f"Invalid MODE: {self.config.MODE}. Must be one of: fixture, historical_replay, paper, testnet, ccxt")
 
         # Validate TRACKED_COINS is not empty
         if not self.config.TRACKED_COINS or not isinstance(self.config.TRACKED_COINS, (list, tuple)):
@@ -203,8 +203,8 @@ class CryptoSignalSystem:
         """Start system."""
         logger.info(f"Starting Crypto Signal System v4 in {self.mode} mode...")
 
-        if self.mode not in ["fixture", "historical_replay", "paper", "testnet"]:
-            logger.error(f"Invalid mode: {self.mode}. Use: fixture, historical_replay, paper, testnet")
+        if self.mode not in ["fixture", "historical_replay", "paper", "testnet", "ccxt"]:
+            logger.error(f"Invalid mode: {self.mode}. Use: fixture, historical_replay, paper, testnet, ccxt")
             return False
 
         # Check kill switch
@@ -425,6 +425,15 @@ class CryptoSignalSystem:
         order = self.order_executor.execute_entry_order(signal, position_size, current_price)
 
         logger.info(f"  Order: {order.get('side')} {order.get('quantity'):.4f} {coin} @ {order.get('price'):.2f}")
+
+        status = order.get('status')
+        filled_quantity = order.get('filled_quantity', 0) or 0
+        if status not in ('filled', 'partially_filled') or filled_quantity <= 0:
+            reason = f"entry order not filled: status={status}, filled_quantity={filled_quantity}"
+            logger.error(f"  {reason}")
+            self.decision_log.log_vetoed(signal, reason)
+            self.kill_switch.activate(reason)
+            return False
 
         self.decision_log.log_approved(signal, approval_id)
         self.decision_log.log_executed(signal, order.get('order_id', ''), order.get('filled_price', 0))

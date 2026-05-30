@@ -3,7 +3,7 @@ Configuration for Crypto Signal System v4.
 All settings centralized here. Secrets loaded from secrets.py.
 """
 
-# DEPLOYMENT MODE: fixture, historical_replay, paper, testnet
+# DEPLOYMENT MODE: fixture, historical_replay, paper, testnet, ccxt
 MODE = "testnet"
 
 # DATA PATHS
@@ -121,8 +121,8 @@ HEARTBEAT_INTERVAL_SEC = 300  # 5 minutes
 HEARTBEAT_NOTIFICATION_THRESHOLD_SEC = 900  # alert if silent > 15 min
 
 # DASHBOARD
-DASHBOARD_ENABLED = True
-DASHBOARD_HOST = "0.0.0.0"   # bind to all interfaces for LAN access on Pi
+DASHBOARD_ENABLED = False
+DASHBOARD_HOST = "127.0.0.1"  # use 0.0.0.0 only after Telegram auth is configured
 DASHBOARD_PORT = 8080
 DASHBOARD_SESSION_HOURS = 24  # how long a Telegram-verified session lasts
 DASHBOARD_EXTERNAL_URL = "http://raspberrypi.local:8080"  # URL sent in Telegram login link
