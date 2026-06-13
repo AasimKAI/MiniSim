@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Set up MiniSim
+Comment=One-click setup for MiniSim v5
+Exec=lxterminal -e "bash -c 'cd \"$(dirname %k)\"; bash install.sh; echo; read -p \"Setup finished — press Enter to close.\"'"
+Icon=system-software-install
+Terminal=false

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="csrf-token" content="__CSRF__">
+<title>MiniSim v5 — Pi</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--line:#222c3a;--txt:#e6edf3;--dim:#8b98a9;
+        --up:#3fb950;--down:#f85149;--warn:#d29922;--acc:#58a6ff;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+       overflow:hidden;padding:10px}
+  .row{display:flex;gap:10px}
+  .top{align-items:center;justify-content:space-between;margin-bottom:10px}
+  .brand{font-weight:700;font-size:20px;letter-spacing:.5px}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px}
+  .pill{font-size:12px;padding:3px 9px;border-radius:20px;background:var(--card);
+        border:1px solid var(--line);color:var(--dim)}
+  .pill.ok{color:var(--up);border-color:#1d3b27}.pill.bad{color:var(--down);border-color:#46211f}
+  .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;height:calc(100% - 56px)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;overflow:hidden}
+  .eq{font-size:46px;font-weight:800;line-height:1}
+  .lab{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .sub{color:var(--dim);font-size:13px;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;padding:4px 0}
+  td{padding:6px 0;border-top:1px solid var(--line)}
+  .up{color:var(--up)}.down{color:var(--down)}.dim{color:var(--dim)}
+  .health{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{font-size:12px;padding:4px 8px;border-radius:8px;background:#0e131b;border:1px solid var(--line)}
+  .chip b{color:var(--txt)}
+  .kill{margin-top:auto;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;
+        width:100%;cursor:pointer;background:#3a1414;color:#ff8d85;border:1px solid #5e2020}
+  .kill.on{background:#1d3b27;color:#7ee0a0;border-color:#2c5e3e}
+  .colflex{display:flex;flex-direction:column;height:100%}
+  .empty{color:var(--dim);font-size:13px;padding:14px 0;text-align:center}
+</style>
+</head>
+<body>
+  <div class="row top">
+    <div class="brand">MiniSim <small>v5 · <span id="mode">—</span></small></div>
+    <div class="row" style="gap:6px">
+      <span class="pill" id="mcp">MCP —</span>
+      <span class="pill" id="llm">LLM —</span>
+      <span class="pill" id="clock">—</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="colflex" style="gap:10px">
+      <div class="card">
+        <div class="lab">Equity</div>
+        <div class="eq" id="equity">—</div>
+        <div class="sub" id="cashline">—</div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="lab">Open Positions</div>
+        <table><thead><tr><th>Coin</th><th>Qty</th><th>Entry</th><th>Now</th><th>P/L</th></tr></thead>
+          <tbody id="pos"></tbody></table>
+        <div class="empty" id="posEmpty">No open positions</div>
+      </div>
+    </div>
+
+    <div class="colflex" style="gap:10px">
+      <div class="card" style="flex:1">
+        <div class="lab">Latest Signals</div>
+        <table><thead><tr><th>Coin</th><th>Action</th><th>Conf</th></tr></thead>
+          <tbody id="sig"></tbody></table>
+        <div class="empty" id="sigEmpty">Waiting for first cycle…</div>
+      </div>
+      <div class="card">
+        <div class="lab">System</div>
+        <div class="health" id="health"></div>
+        <button class="kill" id="kill" onclick="toggleKill()">◉ KILL SWITCH</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const fmt=n=>n==null?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CSRF=(document.querySelector('meta[name=csrf-token]')||{}).content||'';
+function authHeaders(extra){const h=Object.assign({'X-CSRF-Token':CSRF},extra||{});
+  const t=localStorage.getItem('minisim_token'); if(t)h['X-Auth-Token']=t; return h;}
+async function api(url,opts){opts=opts||{};opts.headers=authHeaders(opts.headers);
+  let r=await fetch(url,opts);
+  if(r.status===401){const t=prompt('Dashboard token:'); if(t){localStorage.setItem('minisim_token',t);
+    opts.headers=authHeaders(opts.headers); r=await fetch(url,opts);}}
+  return r;}
+
+let killOn=false;
+async function load(){
+  try{
+    const s=await (await api('/api/status')).json();
+    const d=await (await api('/api/decisions?limit=6')).json();
+    document.getElementById('mode').textContent=(s.mode||'—').toUpperCase();
+    document.getElementById('equity').textContent='$'+fmt(s.equity_usd);
+    document.getElementById('cashline').textContent='Cash $'+fmt(s.cash_usd)+'  ·  '+(s.open_positions||0)+' open';
+    setPill('mcp','MCP '+(s.mcp_transport||'?'), (s.mcp_transport==='mcp'));
+    setPill('llm','LLM '+(s.llm_backend||'?'), (s.llm_model_present!==false));
+    document.getElementById('clock').textContent=new Date().toLocaleTimeString();
+    // positions
+    const pos=s.positions||[];const tb=document.getElementById('pos');tb.innerHTML='';
+    document.getElementById('posEmpty').style.display=pos.length?'none':'block';
+    pos.forEach(p=>{const c=p.unrealised_pnl_pct>=0?'up':'down';
+      tb.innerHTML+=`<tr><td>${esc(p.coin)}</td><td>${fmt(p.quantity)}</td><td>${fmt(p.entry_price)}</td><td>${fmt(p.current_price)}</td><td class="${c}">${p.unrealised_pnl_pct>=0?'+':''}${fmt(p.unrealised_pnl_pct)}%</td></tr>`;});
+    // signals
+    const sb=document.getElementById('sig');sb.innerHTML='';
+    document.getElementById('sigEmpty').style.display=d.length?'none':'block';
+    d.slice(0,6).forEach(x=>{const a=x.action||'STAND_DOWN';
+      const cls=a.includes('BUY')?'up':a.includes('SELL')?'down':'dim';
+      sb.innerHTML+=`<tr><td>${esc(x.coin)}</td><td class="${cls}">${esc(a.replace('ENTRY_',''))}</td><td>${fmt((x.confidence||0)*100)}%</td></tr>`;});
+    // health
+    const h=document.getElementById('health');
+    h.innerHTML=`<span class="chip">cycle <b>${s.last_cycle||'—'}</b></span>
+      <span class="chip">regime <b>${s.regime||'—'}</b></span>
+      <span class="chip">uptime <b>${s.uptime||'—'}</b></span>`;
+    killOn=!!s.kill_switch;const k=document.getElementById('kill');
+    k.classList.toggle('on',killOn);k.textContent=killOn?'◉ RESUME TRADING':'◉ KILL SWITCH';
+  }catch(e){document.getElementById('clock').textContent='offline';}
+}
+async function toggleKill(){await api(killOn?'/api/resume':'/api/kill',{method:'POST'});load();}
+function setPill(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;
+  e.className='pill '+(ok?'ok':'bad');}
+load();setInterval(load,5000);
+</script>
+</body>
+</html>

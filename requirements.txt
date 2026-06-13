@@ -1,0 +1,15 @@
+# --- Core (always needed) ---
+mcp>=1.2.0                 # Model Context Protocol SDK (servers + client)
+fastapi>=0.110.0           # dashboards
+uvicorn[standard]>=0.27.0  # web server for dashboards
+httpx>=0.27.0
+pydantic>=2.5.0
+
+# --- Quantized local LLM ---
+llama-cpp-python>=0.2.79   # runs the GGUF quantized model on the Pi
+
+# --- Market / exchange ---
+ccxt>=4.2.0                # exchange access (used inside exchange MCP server)
+
+# --- Optional / nice to have ---
+numpy>=1.26.0              # indicator math (falls back to pure python if absent)

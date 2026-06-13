@@ -1,0 +1,9 @@
+config/secrets.py
+__pycache__/
+*.pyc
+data/*.jsonl
+logs/*.log
+state/*.json
+state/*.lock
+models/*.gguf
+.venv/

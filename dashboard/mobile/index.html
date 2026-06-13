@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="csrf-token" content="__CSRF__">
+<title>MiniSim v5</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a23;--line:#222c3a;--txt:#e6edf3;--dim:#8b98a9;
+        --up:#3fb950;--down:#f85149;--warn:#d29922;--acc:#58a6ff;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+       padding-bottom:80px}
+  header{position:sticky;top:0;background:rgba(11,14,20,.92);backdrop-filter:blur(8px);
+         padding:14px 16px;border-bottom:1px solid var(--line);z-index:5}
+  .brand{font-weight:700;font-size:18px}.brand small{color:var(--dim);font-weight:400;font-size:12px}
+  .hero{padding:20px 16px}
+  .lab{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .eq{font-size:40px;font-weight:800;line-height:1}
+  .sub{color:var(--dim);font-size:14px;margin-top:8px}
+  .pills{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .pill{font-size:12px;padding:4px 10px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--dim)}
+  .pill.ok{color:var(--up);border-color:#1d3b27}.pill.bad{color:var(--down);border-color:#46211f}
+  section{padding:0 16px 8px}
+  h2{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin:18px 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+  .posrow{display:flex;justify-content:space-between;align-items:center}
+  .posrow+.posrow{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+  .coin{font-weight:700;font-size:16px}.muted{color:var(--dim);font-size:12px}
+  .big{font-size:16px;font-weight:700}.up{color:var(--up)}.down{color:var(--down)}.dim{color:var(--dim)}
+  .tag{font-size:11px;padding:3px 8px;border-radius:6px;background:#0e131b;border:1px solid var(--line);color:var(--dim)}
+  .sig{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+  .sig:first-child{border-top:none}
+  .reason{color:var(--dim);font-size:12px;margin-top:3px;max-width:62%}
+  .empty{color:var(--dim);text-align:center;padding:16px;font-size:13px}
+  .kill{position:fixed;left:16px;right:16px;bottom:16px;border:none;border-radius:12px;padding:15px;
+        font-size:15px;font-weight:700;background:#3a1414;color:#ff8d85;border:1px solid #5e2020;z-index:6}
+  .kill.on{background:#1d3b27;color:#7ee0a0;border-color:#2c5e3e}
+  .health{display:flex;flex-wrap:wrap;gap:8px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">MiniSim <small>v5 · <span id="mode">—</span></small></div>
+  </header>
+
+  <div class="hero">
+    <div class="lab">Equity</div>
+    <div class="eq" id="equity">—</div>
+    <div class="sub" id="cashline">—</div>
+    <div class="pills">
+      <span class="pill" id="mcp">MCP —</span>
+      <span class="pill" id="llm">LLM —</span>
+      <span class="pill" id="regime">regime —</span>
+      <span class="pill" id="clock">—</span>
+    </div>
+  </div>
+
+  <section>
+    <h2>Open Positions</h2>
+    <div class="card"><div id="pos"></div><div class="empty" id="posEmpty">No open positions</div></div>
+
+    <h2>Latest Signals</h2>
+    <div class="card"><div id="sig"></div><div class="empty" id="sigEmpty">Waiting for first cycle…</div></div>
+
+    <h2>System Health</h2>
+    <div class="card"><div class="health" id="health"></div></div>
+  </section>
+
+  <button class="kill" id="kill" onclick="toggleKill()">◉ KILL SWITCH</button>
+
+<script>
+const fmt=n=>n==null?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CSRF=(document.querySelector('meta[name=csrf-token]')||{}).content||'';
+function authHeaders(extra){const h=Object.assign({'X-CSRF-Token':CSRF},extra||{});
+  const t=localStorage.getItem('minisim_token'); if(t)h['X-Auth-Token']=t; return h;}
+async function api(url,opts){opts=opts||{};opts.headers=authHeaders(opts.headers);
+  let r=await fetch(url,opts);
+  if(r.status===401){const t=prompt('Dashboard token:'); if(t){localStorage.setItem('minisim_token',t);
+    opts.headers=authHeaders(opts.headers); r=await fetch(url,opts);}}
+  return r;}
+
+let killOn=false;
+function setPill(id,txt,ok){const e=document.getElementById(id);e.textContent=txt;
+  if(ok!==undefined)e.className='pill '+(ok?'ok':'bad');}
+async function load(){
+  try{
+    const s=await (await api('/api/status')).json();
+    const d=await (await api('/api/decisions?limit=12')).json();
+    document.getElementById('mode').textContent=(s.mode||'—').toUpperCase();
+    document.getElementById('equity').textContent='$'+fmt(s.equity_usd);
+    document.getElementById('cashline').textContent='Cash $'+fmt(s.cash_usd)+'  ·  '+(s.open_positions||0)+' open positions';
+    setPill('mcp','MCP '+(s.mcp_transport||'?'),s.mcp_transport==='mcp');
+    setPill('llm','LLM '+(s.llm_backend||'?'),s.llm_model_present!==false);
+    setPill('regime','regime '+(s.regime||'—'));
+    setPill('clock',new Date().toLocaleTimeString());
+    const pos=s.positions||[],pb=document.getElementById('pos');pb.innerHTML='';
+    document.getElementById('posEmpty').style.display=pos.length?'none':'block';
+    pos.forEach(p=>{const c=p.unrealised_pnl_pct>=0?'up':'down';
+      pb.innerHTML+=`<div class="posrow"><div><div class="coin">${esc(p.coin)}</div>
+        <div class="muted">${fmt(p.quantity)} @ $${fmt(p.entry_price)}</div></div>
+        <div style="text-align:right"><div class="big ${c}">${p.unrealised_pnl_pct>=0?'+':''}${fmt(p.unrealised_pnl_pct)}%</div>
+        <div class="muted">$${fmt(p.current_price)}</div></div></div>`;});
+    const sb=document.getElementById('sig');sb.innerHTML='';
+    document.getElementById('sigEmpty').style.display=d.length?'none':'block';
+    d.slice(0,12).forEach(x=>{const a=x.action||'STAND_DOWN';
+      const cls=a.includes('BUY')?'up':a.includes('SELL')?'down':'dim';
+      sb.innerHTML+=`<div class="sig"><div><span class="coin">${esc(x.coin)}</span>
+        <span class="${cls}" style="margin-left:8px;font-weight:700">${esc(a.replace('ENTRY_',''))}</span>
+        <div class="reason">${esc((x.reasoning||'').slice(0,90))}</div></div>
+        <span class="tag">${fmt((x.confidence||0)*100)}%</span></div>`;});
+    document.getElementById('health').innerHTML=
+      `<span class="tag">version ${s.version||'—'}</span>
+       <span class="tag">cycle ${s.last_cycle||'—'}</span>
+       <span class="tag">uptime ${s.uptime||'—'}</span>
+       <span class="tag">${s.coins_tracked||0} coins</span>`;
+    killOn=!!s.kill_switch;const k=document.getElementById('kill');
+    k.classList.toggle('on',killOn);k.textContent=killOn?'◉ RESUME TRADING':'◉ KILL SWITCH';
+  }catch(e){setPill('clock','offline');}
+}
+async function toggleKill(){if(!killOn&&!confirm('Stop all trading now?'))return;
+  await api(killOn?'/api/resume':'/api/kill',{method:'POST'});load();}
+load();setInterval(load,5000);
+</script>
+</body>
+</html>
