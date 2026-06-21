@@ -20,11 +20,13 @@ Security posture (home-LAN personal tool):
 
 Run:  python -m dashboard.server
 """
-import os, secrets as _secrets
+import os, secrets as _secrets, time as _time
 from urllib.parse import urlparse
 from config import config
 from common import read_json, read_jsonl
 from operations import kill_switch
+
+_candle_cache: dict = {}   # (symbol, limit) -> (fetched_at, data)
 
 try:
     from fastapi import FastAPI, Request, HTTPException
@@ -121,6 +123,59 @@ def build_app():
     def decisions(request: Request, limit: int = 20):
         _require_read(request)
         return JSONResponse(read_jsonl(config.DECISION_LOG, limit=limit)[::-1])
+
+    @app.get("/api/performance")
+    def performance(request: Request, limit: int = 50):
+        _require_read(request)
+        from records.performance import recent_closed_trades, overall_stats
+        trades = recent_closed_trades(limit)
+        stats = overall_stats(trades)
+        stats["recent"] = trades[-20:][::-1]
+        return JSONResponse(stats)
+
+    @app.get("/api/equity_history")
+    def equity_history(request: Request):
+        _require_read(request)
+        return JSONResponse(read_json(config.EQUITY_HISTORY_FILE, []))
+
+    @app.get("/api/prices")
+    def prices(request: Request):
+        _require_read(request)
+        from mcp_servers._marketdata_core import get_ticker
+        result = {}
+        for coin in config.TRACKED_COINS:
+            try:
+                result[coin] = get_ticker(coin)["price"]
+            except Exception:
+                result[coin] = None
+        return JSONResponse(result)
+
+    @app.get("/api/candles")
+    def candles(request: Request, coin: str = "BTC", limit: int = 60):
+        _require_read(request)
+        import httpx
+        symbol = f"{coin.upper()}USDT"
+        key = (symbol, limit)
+        now = _time.time()
+        if key in _candle_cache and now - _candle_cache[key][0] < 60:
+            return JSONResponse(_candle_cache[key][1])
+        resp = httpx.get(
+            "https://api.binance.com/api/v3/klines",
+            params={"symbol": symbol, "interval": config.CANDLE_INTERVAL, "limit": limit},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        # kline row: [openTime, open, high, low, close, volume, ...]
+        data = {
+            "coin": coin.upper(),
+            "interval": config.CANDLE_INTERVAL,
+            "candles": [
+                [float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
+                for k in resp.json()
+            ],
+        }
+        _candle_cache[key] = (now, data)
+        return JSONResponse(data)
 
     @app.post("/api/kill")
     def kill(request: Request):
