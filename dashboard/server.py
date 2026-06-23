@@ -177,6 +177,19 @@ def build_app():
         _candle_cache[key] = (now, data)
         return JSONResponse(data)
 
+    @app.get("/api/strategy_state")
+    def strategy_state(request: Request):
+        _require_read(request)
+        import os as _os
+        data_path = _os.path.join(_os.path.dirname(HERE), "data", "strategy_state.json")
+        state = read_json(data_path, {})
+        try:
+            from strategies import REGISTRY
+            catalogue = {name: inst.to_dict() for name, inst in REGISTRY.items()}
+        except Exception:
+            catalogue = {}
+        return JSONResponse({"state": state, "catalogue": catalogue})
+
     @app.post("/api/kill")
     def kill(request: Request):
         _require_write(request)
@@ -188,6 +201,19 @@ def build_app():
         _require_write(request)
         kill_switch.deactivate()
         return {"kill_switch": False}
+
+    @app.post("/api/wm/minimize")
+    def wm_minimize(request: Request):
+        """Minimize the Pi kiosk window via Wayland (Alt+F9 = labwc iconify)."""
+        import subprocess
+        env = {**os.environ,
+               "WAYLAND_DISPLAY": "wayland-0",
+               "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
+        subprocess.Popen(
+            ["wtype", "-M", "alt", "-k", "F9", "-m", "alt"],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return {"ok": True}
 
     return app
 
