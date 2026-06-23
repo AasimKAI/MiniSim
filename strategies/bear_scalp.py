@@ -1,11 +1,11 @@
 """
 BreakdownScalp — fast momentum short on Bollinger breakdown + volume spike.
 
-Targets the initial breakdown candle, not the sustained trend.
-Tighter SL and TP targets; RSI should NOT yet be oversold (room to fall).
-SHORT only.
+Arithmetic screens for price breaking the lower Bollinger band on elevated
+volume with negative MACD momentum. LLM then evaluates whether this is a
+genuine breakdown or a false break. SHORT only.
 """
-from strategies.base import Strategy, Signal, StrategyParams
+from strategies.base import Strategy, Signal, StrategyParams, LLM_TRIGGER_CONF
 from analysts import indicators as ind
 
 
@@ -15,6 +15,14 @@ class BreakdownScalp(Strategy):
     description = ("Fast short when price breaks Bollinger lower band on high volume. "
                    "Requires MACD momentum negative and RSI not yet oversold. "
                    "Tight SL/TP — exit quickly. SHORT only.")
+    philosophy  = (
+        "Target the initial breakdown candle where price closes below the Bollinger lower band "
+        "on a volume spike (1.5× or more above average). MACD histogram must be negative — "
+        "momentum is already bearish. RSI should NOT yet be oversold (ideally 30–55) because "
+        "we need room for the price to fall further. The wider the Bollinger band, the stronger "
+        "the breakout. Exit quickly — this is a scalp, not a trend trade. Reject setups where "
+        "price is already extremely extended or volume is only marginally elevated."
+    )
     best_for    = ["bear", "trending", "ranging"]
     params      = StrategyParams(
         sl_pct=0.015, tp1_pct=0.03, tp1_frac=0.50,
@@ -45,13 +53,11 @@ class BreakdownScalp(Strategy):
         score   = 0
         reasons = []
 
-        # Price broke below lower band
         if price < bb["lower"]:
             score += 2; reasons.append("price<BB_lower")
         elif price < bb["lower"] * 1.005:
             score += 1; reasons.append("price≈BB_lower")
 
-        # Strong volume (capitulation spike drives the breakdown)
         if vol_ratio >= 2.5:
             score += 3; reasons.append(f"vol×{vol_ratio:.1f}")
         elif vol_ratio >= 1.8:
@@ -59,26 +65,39 @@ class BreakdownScalp(Strategy):
         elif vol_ratio >= 1.3:
             score += 1; reasons.append(f"vol×{vol_ratio:.1f}")
 
-        # MACD negative momentum
         if m and m["hist"] < 0:
             score += 1; reasons.append("MACD hist<0")
             if m["macd"] < 0:
                 score += 1; reasons.append("MACD<0")
 
-        # RSI in 35-55 range — not yet oversold, still room to fall
         if r and 30 < r < 55:
             score += 1; reasons.append(f"RSI={r:.0f}")
 
-        # BB band-width expanding (volatility increasing = real breakdown)
         if bb["width"] > 0.04:
             score += 1; reasons.append(f"BB_w={bb['width']:.3f}")
 
         max_score = 9
-        conf = round(min(0.95, score / max_score), 3)
+        arith_conf = round(min(0.95, score / max_score), 3)
 
-        if conf >= self.params.conf_min:
-            return Signal("SELL", conf, ", ".join(reasons), self.name)
-        return Signal("HOLD", conf, f"no clean breakdown ({score}/{max_score})", self.name)
+        if arith_conf < LLM_TRIGGER_CONF:
+            return Signal("HOLD", arith_conf, f"pre-screen too weak ({score}/{max_score})", self.name)
+
+        facts = {
+            "price":          round(price, 4),
+            "BB_lower":       round(bb["lower"], 4),
+            "BB_upper":       round(bb["upper"], 4),
+            "BB_mid":         round(bb["mid"], 4),
+            "BB_width":       round(bb["width"], 4),
+            "volume_ratio":   round(vol_ratio, 2),
+            "MACD":           round(m["macd"], 6) if m else None,
+            "MACD_hist":      round(m["hist"], 6) if m else None,
+            "RSI":            round(r, 1) if r else None,
+            "regime":         regime,
+            "arithmetic_signals": ", ".join(reasons) or "none",
+            "arithmetic_score":   f"{score}/{max_score}",
+        }
+
+        return self._llm_confirm(coin, regime, "SELL", arith_conf, facts)
 
 
 _instance = BreakdownScalp()

@@ -160,7 +160,21 @@ RangeScalp (safe, both sides).
 
 #### The 6 strategies
 
-Each strategy is pure arithmetic — no LLM in the signal path.
+Each strategy uses a **two-stage signal pipeline**:
+
+1. **Arithmetic hard gates** — fast kill-off with no LLM cost (RSI gate, EMA
+   alignment, ADX gate). If gates fail, return HOLD immediately.
+2. **Arithmetic scoring** — builds a 0–1 pre-screen confidence from weighted
+   indicator checks. If score < 0.35 (`LLM_TRIGGER_CONF`), return HOLD.
+3. **LLM confirmation** — when the pre-screen passes, the LLM receives all
+   computed indicator values, the strategy's `philosophy` string, side constraint,
+   regime, and the arithmetic pre-screen result. It independently decides
+   `BUY / SELL / HOLD` with its own confidence and one-sentence reasoning.
+   The LLM can reject a signal the arithmetic would have taken.
+4. **Fallback** — if the LLM is unavailable, the arithmetic result is used.
+
+Side constraints are enforced in code after the LLM responds — a LONG-only
+strategy cannot return `SELL` regardless of what the model outputs.
 
 | Strategy | Side | Best for | SL | TP targets | Trail | Max hold |
 |----------|------|----------|----|-----------|-------|---------|
@@ -171,26 +185,28 @@ Each strategy is pure arithmetic — no LLM in the signal path.
 | **DipBuy** | LONG only | Bull + ranging | 2.0% | 5 / 10% | 3% | 48h |
 | **RangeScalp** | BOTH | Ranging | 1.5% | 3 / 5% | — | 20h |
 
-**TrendShort** signal logic: EMA20 < 50 < 200, price below EMA200, Supertrend
-bearish, MACD < 0, ADX > 25 with −DI > +DI, higher-timeframe Supertrend confirms.
+**TrendShort**: arithmetic screens for EMA20 < 50 < 200, price below EMA200,
+Supertrend bearish on 15m and 4h, MACD < 0, ADX > 25 with −DI > +DI.
+LLM evaluates the full indicator picture and regime fit before confirming.
 
-**BreakdownScalp**: price breaks below Bollinger lower band, volume spike (1.3–2.5×
-average), MACD histogram negative, RSI 30–55.
+**BreakdownScalp**: arithmetic screens for price below Bollinger lower band,
+volume spike (1.3–2.5× average), MACD histogram negative, RSI 30–55.
+LLM judges whether it is a genuine breakdown or a false break.
 
-**OversoldBounce**: hard gate RSI < 30; scores RSI < 25, StochK < 20 crossing up,
-price below Bollinger lower × 0.97, RSI bullish divergence, volume spike.
+**OversoldBounce**: hard gate RSI < 30 (no LLM cost above this). Arithmetic
+scores RSI depth, StochK position, BB extension, RSI bullish divergence.
+LLM confirms whether a bounce is likely or the bear trend continues.
 
-**MomentumLong**: mirror of TrendShort — bullish EMA stack, Supertrend up, MACD > 0,
-ADX > 20 with +DI > −DI.
+**MomentumLong**: mirror of TrendShort but bullish — EMA20 > 50 > 200, price
+above EMA200, Supertrend up, MACD > 0, ADX > 20 with +DI > −DI.
+LLM evaluates trend maturity and entry quality.
 
-**DipBuy**: hard gates price > EMA200 AND RSI ≤ 52; scores proximity to EMA50
-(< 2%), StochRSI crossing up, MACD improving, RSI divergence.
+**DipBuy**: hard gates price > EMA200 AND RSI ≤ 52. Arithmetic scores proximity
+to EMA50, StochRSI turn, MACD histogram improving, RSI divergence.
+LLM assesses whether this is a real pullback entry or a trend reversal.
 
-**RangeScalp**: hard gate ADX < 25; BUY when RSI < 35 + price < BB lower + StochK
-< 20; SELL when RSI > 65 + price > BB upper + StochK > 80.
-
-Side constraints are enforced downstream — a LONG-only strategy will never produce
-an `ENTRY_SELL` regardless of what the CEO decides.
+**RangeScalp**: hard gate ADX < 25. Arithmetic scores RSI/BB/StochRSI/Keltner
+extremes on both sides. LLM confirms range structure and rejects breakouts.
 
 ---
 

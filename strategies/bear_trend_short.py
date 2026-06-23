@@ -1,11 +1,12 @@
 """
 TrendShort — controlled downtrend following.
 
-Looks for full EMA stack alignment + Supertrend bearish + MACD negative +
-ADX confirming a real trend. Wide TP targets because bear downtrends are
-sustained. SHORT only.
+Arithmetic gates screen for full EMA stack alignment, Supertrend bearish,
+MACD negative, and ADX confirming a real trend. When the pre-screen passes,
+the LLM evaluates the full indicator picture and decides whether to trade.
+SHORT only.
 """
-from strategies.base import Strategy, Signal, StrategyParams
+from strategies.base import Strategy, Signal, StrategyParams, LLM_TRIGGER_CONF
 from analysts import indicators as ind
 
 
@@ -14,6 +15,13 @@ class TrendShort(Strategy):
     label       = "Bear Trend Short"
     description = ("Shorts strong, controlled downtrends. Requires EMA stack alignment, "
                    "Supertrend bearish, MACD < 0, ADX > 25. Wide TP targets for sustained moves.")
+    philosophy  = (
+        "Enter shorts only when a genuine downtrend is confirmed across multiple timeframes. "
+        "All three EMAs must be stacked bearishly (20 < 50 < 200), Supertrend must be down on "
+        "both the 15m and 4h timeframe, MACD must be negative, and ADX must show trend strength "
+        "above 25. Avoid shorting in choppy markets or when any major EMA alignment is missing. "
+        "Wide TP targets because real bear trends are sustained — do not exit too early."
+    )
     best_for    = ["bear", "trending"]
     params      = StrategyParams(
         sl_pct=0.025, tp1_pct=0.08, tp1_frac=0.33,
@@ -60,22 +68,42 @@ class TrendShort(Strategy):
             if adx["minus_di"] > adx["plus_di"]:
                 score += 1; reasons.append("-DI>+DI")
 
-        # Also reward higher timeframe alignment (HTF = 4h via 16× resample)
+        htf_st_dir = None
         htf = ind.resample(candles, 16)
         if len(htf) >= 30:
-            htfc   = [x["close"] for x in htf]
-            htfh   = [x["high"]  for x in htf]
-            htflo  = [x["low"]   for x in htf]
+            htfc  = [x["close"] for x in htf]
+            htfh  = [x["high"]  for x in htf]
+            htflo = [x["low"]   for x in htf]
             htf_st = ind.supertrend(htfh, htflo, htfc)
-            if htf_st and htf_st["direction"] == "down":
-                score += 1; reasons.append("HTF_ST↓")
+            if htf_st:
+                htf_st_dir = htf_st["direction"]
+                if htf_st_dir == "down":
+                    score += 1; reasons.append("HTF_ST↓")
 
         max_score = 10
-        conf = round(score / max_score, 3)
+        arith_conf = round(score / max_score, 3)
 
-        if conf >= self.params.conf_min:
-            return Signal("SELL", conf, ", ".join(reasons), self.name)
-        return Signal("HOLD", conf, f"only {score}/{max_score} bear signals", self.name)
+        if arith_conf < LLM_TRIGGER_CONF:
+            return Signal("HOLD", arith_conf, f"pre-screen too weak ({score}/{max_score})", self.name)
+
+        facts = {
+            "price":         round(price, 4),
+            "EMA20":         round(ema20, 4) if ema20 else None,
+            "EMA50":         round(ema50, 4) if ema50 else None,
+            "EMA200":        round(ema200, 4) if ema200 else None,
+            "supertrend_15m": st["direction"] if st else None,
+            "supertrend_4h":  htf_st_dir,
+            "MACD":          round(m["macd"], 6) if m else None,
+            "MACD_hist":     round(m["hist"], 6) if m else None,
+            "ADX":           round(adx["adx"], 1) if adx else None,
+            "+DI":           round(adx["plus_di"], 1) if adx else None,
+            "-DI":           round(adx["minus_di"], 1) if adx else None,
+            "regime":        regime,
+            "arithmetic_signals": ", ".join(reasons) or "none",
+            "arithmetic_score":   f"{score}/{max_score}",
+        }
+
+        return self._llm_confirm(coin, regime, "SELL", arith_conf, facts)
 
 
 _instance = TrendShort()
