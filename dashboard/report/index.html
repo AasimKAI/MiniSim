@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="csrf-token" content="__CSRF__">
+<meta name="theme-color" content="#0b0e14">
+<title>MiniSim — Daily Report</title>
+<style>
+:root{
+  --bg:#0b0e14;--card:#151a23;--card2:#0e131b;--line:#222c3a;
+  --txt:#e6edf3;--dim:#8b98a9;
+  --up:#3fb950;--dn:#f85149;--warn:#d29922;--acc:#58a6ff;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);
+     font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+     padding-bottom:32px;min-height:100dvh}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:99;
+        background:rgba(11,14,20,.95);backdrop-filter:blur(8px);
+        border-bottom:1px solid var(--line);
+        display:flex;align-items:center;justify-content:space-between;
+        padding:0 12px;height:50px;gap:8px}
+.back{color:var(--acc);text-decoration:none;font-size:13px;flex-shrink:0}
+.date-nav{display:flex;align-items:center;gap:4px;flex:1;justify-content:center}
+.date-nav button{background:var(--card);border:1px solid var(--line);color:var(--txt);
+                 border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer}
+.date-nav button:active{opacity:.7}
+#date-label{font-size:13px;font-weight:600;min-width:120px;text-align:center;color:var(--txt)}
+.today-btn{background:none;border:1px solid var(--acc);color:var(--acc);
+           border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;flex-shrink:0}
+
+/* layout */
+.body{padding:12px 14px 0}
+.sep{height:12px}
+.lab{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:8px;margin-top:2px}
+
+/* summary hero */
+.hero-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.eq-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.eq-num{font-size:38px;font-weight:800;line-height:1;letter-spacing:-1.5px}
+.eq-delta{font-size:15px;font-weight:600}
+.eq-sub{color:var(--dim);font-size:12px;margin-top:4px}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.sbox{background:var(--card2);border:1px solid var(--line);border-radius:9px;
+      padding:9px 4px;text-align:center}
+.sval{font-size:18px;font-weight:700;line-height:1.1}
+.slab{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+
+/* generic cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px;margin-bottom:8px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.coin-name{font-size:16px;font-weight:700;letter-spacing:.2px}
+.coin-time{color:var(--dim);font-size:11px}
+.conf-bar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:8px}
+.conf-bar{height:3px;border-radius:2px}
+.reasoning{font-size:11.5px;color:var(--dim);margin-top:7px;line-height:1.55;
+           padding:7px 8px;background:var(--card2);border-radius:7px;border:1px solid var(--line)}
+
+/* analyst grid */
+.analyst-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
+.av{background:var(--card2);border:1px solid var(--line);border-radius:7px;
+    padding:5px 4px;text-align:center}
+.av-name{font-size:8.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+.av-verdict{font-size:10.5px;font-weight:700;margin-top:2px}
+.av-conf{font-size:9px;color:var(--dim);margin-top:1px}
+.bullish{color:var(--up)}.bearish{color:var(--dn)}.neutral{color:var(--dim)}
+
+/* direction / outcome tags */
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;
+     border-radius:4px;letter-spacing:.4px}
+.tag-long  {color:var(--acc);background:#13233a;border:1px solid #1e3a5c}
+.tag-short {color:var(--warn);background:#332608;border:1px solid #4d3a0d}
+.tag-profit{color:var(--up);background:#0d2617;border:1px solid #1d3b27}
+.tag-loss  {color:var(--dn);background:#2e1212;border:1px solid #46211f}
+.tag-neutral{color:var(--dim);background:var(--card2);border:1px solid var(--line)}
+.regime-pill{font-size:10px;padding:2px 8px;border-radius:20px;
+             background:var(--card2);border:1px solid var(--line);color:var(--dim)}
+
+/* exit cards */
+.exit-card{display:flex;align-items:center;justify-content:space-between;
+           background:var(--card);border:1px solid var(--line);
+           border-radius:10px;padding:10px 12px;margin-bottom:7px}
+.exit-left{display:flex;align-items:center;gap:8px}
+.exit-coin{font-size:15px;font-weight:700}
+.exit-time{color:var(--dim);font-size:10.5px}
+
+/* near miss — collapsible */
+.nm-card{background:var(--card);border:1px solid var(--line);
+         border-radius:10px;margin-bottom:7px;overflow:hidden}
+.nm-head{display:flex;align-items:center;justify-content:space-between;
+         padding:10px 12px;cursor:pointer;gap:8px}
+.nm-head:active{opacity:.7}
+.nm-left{display:flex;align-items:center;gap:8px}
+.nm-coin{font-size:14px;font-weight:700}
+.nm-why{font-size:10.5px;color:var(--dim);max-width:180px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .2s}
+.nm-body.open{max-height:300px;padding-bottom:10px}
+.chevron{color:var(--dim);font-size:12px;transition:transform .2s;flex-shrink:0}
+.chevron.open{transform:rotate(180deg)}
+
+/* position cards */
+.pos-card{background:var(--card);border:1px solid var(--line);
+          border-radius:10px;padding:10px 12px;margin-bottom:7px}
+.pos-top{display:flex;align-items:center;justify-content:space-between}
+.pos-meta{color:var(--dim);font-size:11px;margin-top:4px;
+          display:flex;justify-content:space-between}
+.pbar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:7px}
+.pbar{height:3px;border-radius:2px;transition:width .5s}
+
+/* stand-down bar chart */
+.sd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sd-coin{font-size:12px;font-weight:600;min-width:40px}
+.sd-bar-bg{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.sd-bar{height:6px;background:var(--acc);border-radius:3px;opacity:.6}
+.sd-count{font-size:11px;color:var(--dim);min-width:22px;text-align:right}
+
+/* empty state */
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:24px 0}
+
+/* loading */
+#loader{display:flex;flex-direction:column;align-items:center;
+        justify-content:center;min-height:60vh;gap:12px;color:var(--dim)}
+.spinner{width:28px;height:28px;border:2px solid var(--line);
+         border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="/">← Live</a>
+  <div class="date-nav">
+    <button id="btn-prev">‹</button>
+    <span id="date-label">—</span>
+    <button id="btn-next">›</button>
+  </div>
+  <button class="today-btn" id="btn-today">Today</button>
+</div>
+
+<div id="loader"><div class="spinner"></div><span>Loading report…</span></div>
+<div id="app" style="display:none" class="body"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── brand colours for analyst names ──────────────────────────────────────────
+const ANALYST_LABELS = {
+  technical: 'Tech', volume: 'Vol', order_book: 'OB',
+  on_chain: 'Chain', sentiment: 'News',
+};
+
+// ── date state ────────────────────────────────────────────────────────────────
+let currentDate = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD UTC
+
+function fmtDate(d) {
+  const dt = new Date(d + 'T12:00:00Z');
+  return dt.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+function fmtTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+}
+function fmtUSD(n) {
+  if (n == null) return '—';
+  return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// ── fetch & render ────────────────────────────────────────────────────────────
+async function load(date) {
+  $('loader').style.display = 'flex';
+  $('app').style.display = 'none';
+  $('date-label').textContent = fmtDate(date);
+
+  let data;
+  try {
+    const r = await fetch(`/api/daily_report?date=${date}`);
+    data = await r.json();
+  } catch(e) {
+    $('loader').innerHTML = '<span style="color:var(--dn)">Failed to load report</span>';
+    return;
+  }
+
+  currentDate = date;
+  $('loader').style.display = 'none';
+  $('app').style.display = 'block';
+  $('app').innerHTML = render(data);
+  wireNearMisses();
+}
+
+function render(d) {
+  return `
+    ${renderSummary(d)}
+    <div class="sep"></div>
+    ${renderEntries(d.entries)}
+    <div class="sep"></div>
+    ${renderExits(d.exits)}
+    <div class="sep"></div>
+    ${renderNearMisses(d.near_misses)}
+    <div class="sep"></div>
+    ${renderOpenPositions(d.open_positions)}
+    <div class="sep"></div>
+    ${renderStandDowns(d.stand_down_by_coin, d.stand_down_total)}
+  `;
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+function renderSummary(d) {
+  const dPos = d.equity_delta != null && d.equity_delta >= 0;
+  const dCol = d.equity_delta == null ? 'var(--dim)' : dPos ? 'var(--up)' : 'var(--dn)';
+  const dSign = d.equity_delta == null ? '' : dPos ? '+' : '-';
+  const dStr  = d.equity_delta == null ? '—' : `${dSign}${fmtUSD(d.equity_delta)} (${dSign}${Math.abs(d.equity_delta_pct)}%)`;
+
+  return `
+  <div class="hero-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div class="lab" style="margin-bottom:4px">Equity change</div>
+        <div class="eq-row">
+          <div class="eq-num" style="color:${dCol}">${dSign}${fmtUSD(d.equity_delta)}</div>
+          <div class="eq-delta" style="color:${dCol}">${dSign}${d.equity_delta_pct != null ? Math.abs(d.equity_delta_pct) + '%' : '—'}</div>
+        </div>
+        <div class="eq-sub">${d.equity_start != null ? fmtUSD(d.equity_start) + ' → ' + fmtUSD(d.equity_end) : 'No equity data for this day'}</div>
+      </div>
+      <span class="regime-pill">${d.regime || '—'}</span>
+    </div>
+    <div class="stat-row">
+      <div class="sbox"><div class="sval" style="color:var(--acc)">${d.entries.length}</div><div class="slab">Entries</div></div>
+      <div class="sbox"><div class="sval" style="color:var(--dim)">${d.exits.length}</div><div class="slab">Exits</div></div>
+      <div class="sbox"><div class="sval" style="color:var(--warn)">${d.near_misses.length}</div><div class="slab">Near Miss</div></div>
+      <div class="sbox"><div class="sval">${d.stand_down_total}</div><div class="slab">Stood Down</div></div>
+    </div>
+  </div>`;
+}
+
+// ── Entries ───────────────────────────────────────────────────────────────────
+function renderEntries(entries) {
+  const cards = entries.length === 0
+    ? '<div class="empty">No entries this day</div>'
+    : entries.map(e => {
+        const isShort = e.action === 'ENTRY_SELL';
+        const tagClass = isShort ? 'tag-short' : 'tag-long';
+        const tagLabel = isShort ? 'SHORT' : 'LONG';
+        const barCol   = isShort ? 'var(--warn)' : 'var(--acc)';
+        const conf     = Math.round((e.confidence || 0) * 100);
+        const analysts = renderAnalysts(e.analysts || []);
+        const reasoning = parseReasoning(e.reasoning || '');
+        return `
+        <div class="card">
+          <div class="card-head">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="coin-name">${e.coin}</span>
+              <span class="tag ${tagClass}">${tagLabel}</span>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:700">${conf}% conf</div>
+              <div class="coin-time">${fmtTime(e.timestamp)}</div>
+            </div>
+          </div>
+          <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barCol}"></div></div>
+          ${analysts}
+          <div class="reasoning">${reasoning}</div>
+        </div>`;
+      }).join('');
+  return `<div class="lab">Trades Entered</div>${cards}`;
+}
+
+function renderAnalysts(analysts) {
+  if (!analysts.length) return '';
+  return `<div class="analyst-grid">${analysts.map(a => {
+    const label = ANALYST_LABELS[a.a] || a.a;
+    const v = a.v || 'neutral';
+    const c = Math.round((a.c || 0) * 100);
+    return `<div class="av">
+      <div class="av-name">${label}</div>
+      <div class="av-verdict ${v}">${v.charAt(0).toUpperCase() + v.slice(1)}</div>
+      <div class="av-conf">${c}%</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function parseReasoning(r) {
+  // Extract structured fields from the reasoning string
+  const parts = [];
+  const regime = r.match(/regime=([^\s;]+)/);
+  const score  = r.match(/blended_score=([^\s;]+)/);
+  const ceo    = r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
+  const agree  = r.match(/agree=(True|False)/);
+  if (regime) parts.push(`<b>Regime:</b> ${regime[1]}`);
+  if (score)  parts.push(`<b>Blended score:</b> ${score[1]}`);
+  if (ceo)    parts.push(`<b>CEO:</b> ${ceo[1]} (${Math.round(parseFloat(ceo[2])*100)}% conf)`);
+  if (agree)  parts.push(`<b>Analysts agree:</b> ${agree[1]}`);
+  return parts.length ? parts.join(' · ') : r;
+}
+
+// ── Exits ─────────────────────────────────────────────────────────────────────
+function renderExits(exits) {
+  const cards = exits.length === 0
+    ? '<div class="empty">No exits this day</div>'
+    : exits.map(e => {
+        const oc = e.outcome === 'profit' ? 'tag-profit' : e.outcome === 'loss' ? 'tag-loss' : 'tag-neutral';
+        return `
+        <div class="exit-card">
+          <div class="exit-left">
+            <span class="exit-coin">${e.coin}</span>
+            <span class="tag ${oc}">${e.label}</span>
+          </div>
+          <span class="exit-time">${fmtTime(e.timestamp)}</span>
+        </div>`;
+      }).join('');
+  return `<div class="lab">Exits</div>${cards}`;
+}
+
+// ── Near Misses ───────────────────────────────────────────────────────────────
+function renderNearMisses(nms) {
+  if (!nms.length) {
+    return `<div class="lab">Near Misses <span style="font-size:9px;font-weight:400">(conf ≥ 45%)</span></div>
+            <div class="empty">None — all stands were low confidence</div>`;
+  }
+  const cards = nms.map((d, i) => {
+    const conf = Math.round((d.confidence || 0) * 100);
+    const why = shortReason(d.reasoning || '');
+    const analysts = renderAnalysts(d.analysts || []);
+    const reasoning = parseReasoning(d.reasoning || '');
+    return `
+    <div class="nm-card">
+      <div class="nm-head" onclick="toggleNM(${i})">
+        <div class="nm-left">
+          <span class="nm-coin">${d.coin}</span>
+          <span class="nm-why">${why}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="font-size:12px;color:var(--warn)">${conf}%</span>
+          <span class="chevron" id="chev-${i}">▾</span>
+        </div>
+      </div>
+      <div class="nm-body" id="nm-body-${i}">
+        ${analysts}
+        <div class="reasoning" style="margin-top:7px">${reasoning}</div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="lab">Near Misses <span style="font-size:9px;font-weight:400">(conf ≥ 45% but stood down)</span></div>${cards}`;
+}
+
+function shortReason(r) {
+  const ceo = r.match(/ceo=([^\s;(]+)/);
+  const score = r.match(/blended_score=([^\s;]+)/);
+  if (ceo && score) return `CEO ${ceo[1]}, score ${score[1]}`;
+  return r.slice(0, 50);
+}
+
+function toggleNM(i) {
+  const body = document.getElementById('nm-body-' + i);
+  const chev = document.getElementById('chev-' + i);
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+function wireNearMisses() {}   // onclick handles it inline
+
+// ── Open Positions ────────────────────────────────────────────────────────────
+function renderOpenPositions(positions) {
+  if (!positions || !positions.length) {
+    return `<div class="lab">Open Positions (live)</div><div class="empty">No open positions</div>`;
+  }
+  const cards = positions.map(p => {
+    const pnl  = p.unrealised_pnl_pct || 0;
+    const col  = pnl >= 0 ? 'var(--up)' : 'var(--dn)';
+    const side = p.side === 'SHORT' ? 'tag-short' : 'tag-long';
+    const barW = Math.min(Math.abs(pnl) * 4, 100);
+    return `
+    <div class="pos-card">
+      <div class="pos-top">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="font-size:15px;font-weight:700">${p.coin}</span>
+          <span class="tag ${side}">${p.side}</span>
+        </div>
+        <span style="font-size:15px;font-weight:700;color:${col}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%</span>
+      </div>
+      <div class="pos-meta">
+        <span>Entry $${p.entry_price != null ? p.entry_price.toLocaleString() : '—'}</span>
+        <span>Current $${p.current_price != null ? p.current_price.toLocaleString() : '—'}</span>
+      </div>
+      <div class="pbar-bg"><div class="pbar" style="width:${barW}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+  return `<div class="lab">Open Positions (live)</div>${cards}`;
+}
+
+// ── Stand-Down Chart ──────────────────────────────────────────────────────────
+function renderStandDowns(byCoins, total) {
+  if (!byCoins || !Object.keys(byCoins).length) {
+    return `<div class="lab">Stand-Down Breakdown</div><div class="empty">No data</div>`;
+  }
+  const max = Math.max(...Object.values(byCoins));
+  const rows = Object.entries(byCoins).map(([coin, n]) => `
+    <div class="sd-row">
+      <span class="sd-coin">${coin}</span>
+      <div class="sd-bar-bg"><div class="sd-bar" style="width:${Math.round(n/max*100)}%"></div></div>
+      <span class="sd-count">${n}</span>
+    </div>`).join('');
+  return `
+  <div class="lab">Stand-Down Breakdown <span style="font-size:9px;font-weight:400">(${total} total)</span></div>
+  <div class="card">${rows}</div>`;
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function offsetDate(date, days) {
+  const d = new Date(date + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+$('btn-prev').onclick   = () => load(offsetDate(currentDate, -1));
+$('btn-next').onclick   = () => load(offsetDate(currentDate, +1));
+$('btn-today').onclick  = () => load(new Date().toISOString().slice(0, 10));
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const urlDate = new URLSearchParams(location.search).get('date');
+load(urlDate || new Date().toISOString().slice(0, 10));
+</script>
+</body>
+</html>

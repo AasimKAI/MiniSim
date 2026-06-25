@@ -190,6 +190,105 @@ def build_app():
             catalogue = {}
         return JSONResponse({"state": state, "catalogue": catalogue})
 
+    @app.get("/report", response_class=HTMLResponse)
+    def report():
+        return _page("report")
+
+    @app.get("/api/daily_report")
+    def daily_report(request: Request, date: str = ""):
+        import datetime, json as _json, re
+        _require_read(request)
+
+        try:
+            target = datetime.date.fromisoformat(date) if date else datetime.datetime.utcnow().date()
+        except ValueError:
+            target = datetime.datetime.utcnow().date()
+
+        date_str = target.isoformat()
+        prev_str = (target - datetime.timedelta(days=1)).isoformat()
+        next_str = (target + datetime.timedelta(days=1)).isoformat()
+
+        entries, exits, near_misses, sd_by_coin = [], [], [], {}
+
+        try:
+            with open(config.DECISION_LOG) as fh:
+                for raw in fh:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        d = _json.loads(raw)
+                    except Exception:
+                        continue
+                    if not d.get("timestamp", "").startswith(date_str):
+                        continue
+                    action = d.get("action", "")
+                    coin   = d.get("coin", "")
+                    if action in ("ENTRY_BUY", "ENTRY_SELL"):
+                        entries.append(d)
+                    elif action == "EXIT":
+                        exits.append(d)
+                    elif action == "STAND_DOWN":
+                        sd_by_coin[coin] = sd_by_coin.get(coin, 0) + 1
+                        if d.get("confidence", 0) >= 0.45:
+                            near_misses.append(d)
+        except FileNotFoundError:
+            pass
+
+        # Equity delta from equity_history
+        eq_hist = read_json(config.EQUITY_HISTORY_FILE, [])
+        import datetime as _dt
+        day_start = _dt.datetime.fromisoformat(date_str + "T00:00:00+00:00").timestamp()
+        day_end   = day_start + 86400
+        day_pts   = [p for p in eq_hist if day_start <= p["ts"] < day_end]
+        eq_start  = day_pts[0]["equity"]  if day_pts else None
+        eq_end    = day_pts[-1]["equity"] if day_pts else None
+        status    = read_json(config.STATUS_FILE, {})
+        today_str = _dt.datetime.utcnow().date().isoformat()
+        if date_str == today_str:
+            eq_end = status.get("equity_usd", eq_end)
+        eq_delta = eq_pct = None
+        if eq_start and eq_end:
+            eq_delta = round(eq_end - eq_start, 2)
+            eq_pct   = round(eq_delta / eq_start * 100, 2)
+
+        def _parse_exit(reasoning):
+            r = reasoning or ""
+            for tp, label in [("T1", "TP1"), ("T2", "TP2"), ("T3", "TP3")]:
+                if f"take-profit {tp}" in r or tp in r:
+                    m = re.search(r'at ([\d.]+)%', r)
+                    return {"label": f"{label} +{m.group(1)}%" if m else label, "outcome": "profit"}
+            if "trailing stop" in r.lower():
+                return {"label": "Trailing stop", "outcome": "profit"}
+            if "stop loss" in r.lower():
+                m = re.search(r'\(([-+]?[\d.]+)%\)', r)
+                return {"label": f"SL {m.group(1)}%" if m else "Stop loss", "outcome": "loss"}
+            if "max hold" in r.lower():
+                return {"label": "Timeout", "outcome": "neutral"}
+            return {"label": r[:50], "outcome": "neutral"}
+
+        exits_out = []
+        for e in exits:
+            p = _parse_exit(e.get("reasoning", ""))
+            exits_out.append({**e, "label": p["label"], "outcome": p["outcome"]})
+
+        near_misses.sort(key=lambda d: -d.get("confidence", 0))
+
+        return JSONResponse({
+            "date": date_str, "prev_date": prev_str, "next_date": next_str,
+            "equity_start": eq_start, "equity_end": eq_end,
+            "equity_delta": eq_delta, "equity_delta_pct": eq_pct,
+            "regime": status.get("regime", "unknown"),
+            "open_positions": status.get("positions", []),
+            "entries": entries,
+            "exits": exits_out,
+            "near_misses": near_misses[:20],
+            "stand_down_total": sum(sd_by_coin.values()),
+            "stand_down_by_coin": dict(
+                sorted(sd_by_coin.items(), key=lambda x: -x[1])[:10]
+            ),
+        })
+
     @app.post("/api/kill")
     def kill(request: Request):
         _require_write(request)
