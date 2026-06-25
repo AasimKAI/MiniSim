@@ -133,6 +133,11 @@ canvas.echart{flex:1;min-height:0;width:100%;display:block;margin-top:6px}
 .cell-bar{height:2px;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)}
 .abuy{color:var(--up)}.asell{color:var(--dn)}.asd{color:var(--dim)}
 .bbuy{background:var(--up)}.bsell{background:var(--dn)}.bsd{background:#3a4a5c}
+/* near-miss: high-conf stand-down in last 12 min */
+.cell.nm-hint{border-color:rgba(210,153,34,.40);background:#0e0e05}
+/* strategy tag inside entry cells */
+.cell-strat{font-size:7px;color:#6a7a8a;font-style:italic;white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis;max-width:52px;flex-shrink:0}
 
 /* ── FOOTER ── */
 .footer{height:52px;flex-shrink:0;margin-bottom:8px;display:flex;align-items:center;
@@ -742,6 +747,15 @@ async function load(){
     const prices=await prR.json();
     try{renderStratModal(await ssR.json());}catch(_){}
 
+    /* near-miss set — STAND_DOWN conf≥.45 seen in last 12 min */
+    const nmCoins=new Set();
+    const _now=Date.now();
+    d.forEach(dec=>{
+      if(dec.action==='STAND_DOWN'&&(dec.confidence||0)>=0.45&&
+         (_now-new Date(dec.timestamp).getTime())<720000)
+        nmCoins.add(dec.coin);
+    });
+
     /* pulse */
     const pl=document.getElementById('pulse');
     pl.classList.add('on');setTimeout(()=>pl.classList.remove('on'),700);
@@ -834,10 +848,13 @@ async function load(){
       const age=sig.timestamp?sigAge(sig.timestamp):'';
       const stale=isStale(sig.timestamp);
       const dots=analystDots(sig.analysts);
+      const stratMatch=(sig.reasoning||'').match(/strategy[=:](\w+)/i);
+      const stratTag=stratMatch?stratMatch[1]:'';
+      const nmCls=(cls==='sd'&&nmCoins.has(coin))?'nm-hint':'';
       const div=document.createElement('div');
-      div.className=`cell ${sigCls} ${openCls}`;
+      div.className=`cell ${sigCls} ${openCls} ${nmCls}`;
       div.style.animationDelay=`${i*30}ms`;
-      div.title=`${coin}${openCls?' · OPEN POSITION':''} — tap for chart`;
+      div.title=`${coin}${openCls?' · OPEN POSITION':''}${nmCls?' · near miss':''} — tap for chart`;
       div.onclick=()=>openModal(coin);
       div.innerHTML=`
         <div class="cell-top">
@@ -847,6 +864,7 @@ async function load(){
         </div>
         <div class="cell-mid">
           <span class="cell-act a${cls}">${esc(label)}${conf?' '+conf+'%':''}</span>
+          ${cls!=='sd'&&stratTag?`<span class="cell-strat">${esc(stratTag)}</span>`:''}
           ${age?`<span class="cell-age${stale?' stale':''}">${esc(age)}</span>`:''}
         </div>
         <div class="adots">${dots}</div>
@@ -860,12 +878,20 @@ async function load(){
     drawDonut(document.getElementById('donut'),perf.wins||0,perf.trades||0);
     const pc=(perf.realized_usd||0)>=0?'up':'dn';
     const ac=(perf.avg_pnl_pct||0)>=0?'up':'dn';
+    const _updTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     document.getElementById('chips').innerHTML=
       `<span class="chip"><b>${perf.trades||0}</b> trades</span>
        <span class="chip">avg <b class="${ac}">${fmtp(perf.avg_pnl_pct)}</b></span>
        <span class="chip">realized <b class="${pc}">${(perf.realized_usd||0)>=0?'+':''}$${fmt(perf.realized_usd)}</b></span>
        <span class="chip"><b>${s.coins_tracked||15}</b> coins</span>
-       <span class="chip clickable" id="stratChip" onclick="openStratModal()" title="Strategy state">⚡ STRAT</span>`;
+       <span class="chip clickable" id="stratChip" onclick="openStratModal()" title="Click for strategy details">⚡ STRAT</span>
+       <span class="chip" style="color:var(--dim)">↻ ${esc(_updTime)}</span>`;
+    /* overwrite strat chip text with active strategy names */
+    const _activeStrats=(_stratCache&&_stratCache.state&&_stratCache.state.active_strategies)||[];
+    if(_activeStrats.length){
+      const _sc=document.getElementById('stratChip');
+      if(_sc) _sc.innerHTML='⚡ '+esc(_activeStrats.slice(0,3).join(' · '));
+    }
 
     /* trade log cache */
     _tradeCache=perf.recent||[];
