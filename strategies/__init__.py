@@ -9,6 +9,8 @@ from strategies.bear_bounce      import _instance as OversoldBounce
 from strategies.bull_momentum    import _instance as MomentumLong
 from strategies.bull_dip         import _instance as DipBuy
 from strategies.range_scalp      import _instance as RangeScalp
+from strategies.vol_breakout     import _instance as VolBreakout
+from strategies.micro_scalp      import _instance as MicroScalp
 
 REGISTRY: dict = {
     s.name: s for s in [
@@ -18,6 +20,8 @@ REGISTRY: dict = {
         MomentumLong,
         DipBuy,
         RangeScalp,
+        VolBreakout,
+        MicroScalp,
     ]
 }
 

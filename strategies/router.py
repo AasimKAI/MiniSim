@@ -87,6 +87,18 @@ def _call_router(market_state: dict, perf: dict) -> dict:
         for coin, d in ms.get("per_coin", {}).items()
     )
 
+    from config import config as cfg
+    position_usd = getattr(cfg, "POSITION_SIZE_USD", 100)
+    max_exp_usd  = getattr(cfg, "MAX_EXPOSURE_USD", 500)
+    account_note = ""
+    if position_usd <= 25 or max_exp_usd <= 200:
+        account_note = (
+            f"\nSMALL ACCOUNT NOTE: position size is ${position_usd}, max exposure ${max_exp_usd}. "
+            f"Prefer capital-preservation strategies (MicroScalp, VolBreakout, RangeScalp) with "
+            f"tight stop-losses. Avoid stacking more than 2 simultaneous positions. "
+            f"Keep risk_level ≤ 0.8 unless the setup is extremely clean."
+        )
+
     sysmsg = (
         "You are the strategy director of an automated crypto trading desk. "
         "Your job is to select 1-3 trading strategies from the available catalogue "
@@ -98,6 +110,7 @@ def _call_router(market_state: dict, perf: dict) -> dict:
         "5. In volatile/uncertain markets, select at most 1 strategy and keep risk_level ≤ 0.8.\n"
         "6. If no strategy fits well, return only RangeScalp with risk_level 0.5.\n"
         "7. Be conservative — fewer, better-fit strategies beat trying to cover all bases."
+        + account_note
     )
 
     user = f"""Market state:
