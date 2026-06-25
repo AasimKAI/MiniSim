@@ -223,6 +223,7 @@ canvas.cchart{width:100%;height:220px;display:block}
     <span class="eq-delta" id="eqdelta"></span>
   </div>
   <div class="cashline" id="cashline">—</div>
+  <div class="cashline" id="stratline" style="margin-top:2px"></div>
   <canvas class="echart" id="echart"></canvas>
   <div class="stat-row">
     <div class="sbox">
@@ -500,7 +501,16 @@ async function load(){
     const s=await sR.json(),d=await dR.json();
     const perf=await pR.json(),hist=await hR.json();
     const prices=await prR.json();
-    try{const ss=await ssR.json();renderStrategies(ss);}catch(_){}
+    try{
+      const ss=await ssR.json();
+      renderStrategies(ss);
+      const active=(ss.state||{}).active_strategies||[];
+      const risk=(ss.state||{}).risk_level!=null?(ss.state||{}).risk_level:1.0;
+      const sl=document.getElementById('stratline');
+      if(sl) sl.textContent = active.length
+        ? 'Active: '+active.join(', ')+'  ·  risk ×'+risk
+        : '';
+    }catch(_){}
 
     const pulse=document.getElementById('pulse');
     pulse.classList.add('on');setTimeout(()=>pulse.classList.remove('on'),700);

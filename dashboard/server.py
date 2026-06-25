@@ -196,19 +196,21 @@ def build_app():
 
     @app.get("/api/daily_report")
     def daily_report(request: Request, date: str = ""):
-        import datetime, json as _json, re
+        import datetime as _dt, json as _json, re
         _require_read(request)
 
         try:
-            target = datetime.date.fromisoformat(date) if date else datetime.datetime.utcnow().date()
+            target = _dt.date.fromisoformat(date) if date else _dt.datetime.utcnow().date()
         except ValueError:
-            target = datetime.datetime.utcnow().date()
+            target = _dt.datetime.utcnow().date()
 
         date_str = target.isoformat()
-        prev_str = (target - datetime.timedelta(days=1)).isoformat()
-        next_str = (target + datetime.timedelta(days=1)).isoformat()
+        prev_str = (target - _dt.timedelta(days=1)).isoformat()
+        next_str = (target + _dt.timedelta(days=1)).isoformat()
 
-        entries, exits, near_misses, sd_by_coin = [], [], [], {}
+        entries, exits, sd_by_coin = [], [], {}
+        # near_miss_map: coin -> {best: record, count: int}
+        nm_map: dict = {}
 
         try:
             with open(config.DECISION_LOG) as fh:
@@ -230,22 +232,52 @@ def build_app():
                         exits.append(d)
                     elif action == "STAND_DOWN":
                         sd_by_coin[coin] = sd_by_coin.get(coin, 0) + 1
-                        if d.get("confidence", 0) >= 0.45:
-                            near_misses.append(d)
+                        conf = d.get("confidence", 0)
+                        if conf >= 0.45:
+                            if coin not in nm_map or conf > nm_map[coin]["best"]["confidence"]:
+                                nm_map[coin] = {"best": d, "count": nm_map.get(coin, {}).get("count", 0) + 1}
+                            else:
+                                nm_map[coin]["count"] += 1
         except FileNotFoundError:
             pass
 
-        # Equity delta from equity_history
-        eq_hist = read_json(config.EQUITY_HISTORY_FILE, [])
-        import datetime as _dt
+        # Near misses — one per coin, sorted by confidence, with repeat count
+        near_misses = sorted(
+            [{**v["best"], "nm_count": v["count"]} for v in nm_map.values()],
+            key=lambda d: -d["confidence"],
+        )
+
+        # Realized P&L for this day from the tax ledger
+        realized_usd = 0.0
+        wins_today = losses_today = 0
+        try:
+            from records.performance import _match_trades
+            fills = []
+            with open(config.TAX_LEDGER) as fh:
+                for raw in fh:
+                    raw = raw.strip()
+                    if raw:
+                        try: fills.append(_json.loads(raw))
+                        except: pass
+            closed_today = [t for t in _match_trades(fills)
+                            if t.get("sell_ts", "").startswith(date_str)]
+            for t in closed_today:
+                realized_usd += t["qty"] * t["open_price"] * t["pnl_pct"] / 100
+                if t["pnl_pct"] > 0: wins_today += 1
+                else: losses_today += 1
+            realized_usd = round(realized_usd, 2)
+        except Exception:
+            pass
+
+        # Equity delta
+        eq_hist   = read_json(config.EQUITY_HISTORY_FILE, [])
         day_start = _dt.datetime.fromisoformat(date_str + "T00:00:00+00:00").timestamp()
         day_end   = day_start + 86400
         day_pts   = [p for p in eq_hist if day_start <= p["ts"] < day_end]
         eq_start  = day_pts[0]["equity"]  if day_pts else None
         eq_end    = day_pts[-1]["equity"] if day_pts else None
         status    = read_json(config.STATUS_FILE, {})
-        today_str = _dt.datetime.utcnow().date().isoformat()
-        if date_str == today_str:
+        if date_str == _dt.datetime.utcnow().date().isoformat():
             eq_end = status.get("equity_usd", eq_end)
         eq_delta = eq_pct = None
         if eq_start and eq_end:
@@ -267,22 +299,19 @@ def build_app():
                 return {"label": "Timeout", "outcome": "neutral"}
             return {"label": r[:50], "outcome": "neutral"}
 
-        exits_out = []
-        for e in exits:
-            p = _parse_exit(e.get("reasoning", ""))
-            exits_out.append({**e, "label": p["label"], "outcome": p["outcome"]})
-
-        near_misses.sort(key=lambda d: -d.get("confidence", 0))
+        exits_out = [{**e, **_parse_exit(e.get("reasoning", ""))} for e in exits]
 
         return JSONResponse({
             "date": date_str, "prev_date": prev_str, "next_date": next_str,
             "equity_start": eq_start, "equity_end": eq_end,
             "equity_delta": eq_delta, "equity_delta_pct": eq_pct,
+            "realized_usd": realized_usd,
+            "wins_today": wins_today, "losses_today": losses_today,
             "regime": status.get("regime", "unknown"),
             "open_positions": status.get("positions", []),
             "entries": entries,
             "exits": exits_out,
-            "near_misses": near_misses[:20],
+            "near_misses": near_misses,
             "stand_down_total": sum(sd_by_coin.values()),
             "stand_down_by_coin": dict(
                 sorted(sd_by_coin.items(), key=lambda x: -x[1])[:10]

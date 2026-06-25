@@ -17,7 +17,6 @@ body{background:var(--bg);color:var(--txt);
      font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
      padding-bottom:32px;min-height:100dvh}
 
-/* top bar */
 .topbar{position:sticky;top:0;z-index:99;
         background:rgba(11,14,20,.95);backdrop-filter:blur(8px);
         border-bottom:1px solid var(--line);
@@ -28,22 +27,27 @@ body{background:var(--bg);color:var(--txt);
 .date-nav button{background:var(--card);border:1px solid var(--line);color:var(--txt);
                  border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer}
 .date-nav button:active{opacity:.7}
-#date-label{font-size:13px;font-weight:600;min-width:120px;text-align:center;color:var(--txt)}
+#date-label{font-size:13px;font-weight:600;min-width:120px;text-align:center}
 .today-btn{background:none;border:1px solid var(--acc);color:var(--acc);
            border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;flex-shrink:0}
 
-/* layout */
 .body{padding:12px 14px 0}
 .sep{height:12px}
 .lab{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:8px;margin-top:2px}
 
-/* summary hero */
+/* hero summary */
 .hero-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-.eq-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.eq-num{font-size:38px;font-weight:800;line-height:1;letter-spacing:-1.5px}
-.eq-delta{font-size:15px;font-weight:600}
-.eq-sub{color:var(--dim);font-size:12px;margin-top:4px}
-.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.eq-num{font-size:36px;font-weight:800;line-height:1;letter-spacing:-1.5px}
+.eq-pct{font-size:15px;font-weight:600;margin-left:6px}
+.eq-sub{color:var(--dim);font-size:12px;margin-top:3px}
+.pnl-row{display:flex;align-items:center;gap:8px;margin-top:8px;
+         padding:8px 10px;background:var(--card2);border-radius:8px;border:1px solid var(--line)}
+.pnl-label{font-size:11px;color:var(--dim)}
+.pnl-val{font-size:13px;font-weight:700;margin-left:auto}
+.regime-pill{font-size:10px;padding:2px 8px;border-radius:20px;text-transform:capitalize;
+             background:var(--card2);border:1px solid var(--line);color:var(--dim);flex-shrink:0}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
 .sbox{background:var(--card2);border:1px solid var(--line);border-radius:9px;
       padding:9px 4px;text-align:center}
 .sval{font-size:18px;font-weight:700;line-height:1.1}
@@ -53,14 +57,13 @@ body{background:var(--bg);color:var(--txt);
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
       padding:12px;margin-bottom:8px}
 
-/* entry cards — coloured left border to distinguish from everything else */
+/* entry cards — coloured left border */
 .entry-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
             padding:12px;margin-bottom:8px;border-left-width:3px}
-.entry-card.long {border-left-color:var(--acc);  background:#0f1620}
-.entry-card.short{border-left-color:var(--warn); background:#110e05}
-
-.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.coin-name{font-size:16px;font-weight:700;letter-spacing:.2px}
+.entry-card.long {border-left-color:var(--acc); background:#0e1520}
+.entry-card.short{border-left-color:var(--warn);background:#110e05}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.coin-name{font-size:16px;font-weight:700}
 .ts{color:var(--dim);font-size:11px;margin-top:2px}
 .conf-bar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:8px}
 .conf-bar{height:3px;border-radius:2px}
@@ -70,9 +73,8 @@ body{background:var(--bg);color:var(--txt);
 
 /* analyst grid */
 .analyst-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
-.av{background:var(--card2);border:1px solid var(--line);border-radius:7px;
-    padding:5px 4px;text-align:center}
-.av-name{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+.av{background:var(--card2);border:1px solid var(--line);border-radius:7px;padding:5px 4px;text-align:center}
+.av-name{font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px}
 .av-verdict{font-size:10.5px;font-weight:700;margin-top:2px}
 .av-conf{font-size:9px;color:var(--dim);margin-top:1px}
 .bullish{color:var(--up)}.bearish{color:var(--dn)}.neutral{color:var(--dim)}
@@ -80,14 +82,12 @@ body{background:var(--bg);color:var(--txt);
 /* tags */
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;
      border-radius:4px;letter-spacing:.4px}
-.tag-long   {color:var(--acc);background:#13233a;border:1px solid #1e3a5c}
+.tag-long   {color:var(--acc); background:#13233a;border:1px solid #1e3a5c}
 .tag-short  {color:var(--warn);background:#332608;border:1px solid #4d3a0d}
-.tag-profit {color:var(--up);background:#0d2617;border:1px solid #1d3b27}
-.tag-loss   {color:var(--dn);background:#2e1212;border:1px solid #46211f}
-.tag-neutral{color:var(--dim);background:var(--card2);border:1px solid var(--line)}
-.regime-pill{font-size:10px;padding:2px 8px;border-radius:20px;
-             background:var(--card2);border:1px solid var(--line);color:var(--dim);
-             text-transform:capitalize}
+.tag-profit {color:var(--up);  background:#0d2617;border:1px solid #1d3b27}
+.tag-loss   {color:var(--dn);  background:#2e1212;border:1px solid #46211f}
+.tag-neutral{color:var(--dim); background:var(--card2);border:1px solid var(--line)}
+.tag-strat  {color:var(--dim); background:var(--card2);border:1px solid var(--line);font-size:9px}
 
 /* exit cards */
 .exit-card{background:var(--card);border:1px solid var(--line);
@@ -102,15 +102,17 @@ body{background:var(--bg);color:var(--txt);
 .nm-head{display:flex;align-items:center;justify-content:space-between;
          padding:10px 12px;cursor:pointer;gap:8px}
 .nm-head:active{opacity:.7}
-.nm-left{display:flex;align-items:center;gap:8px;min-width:0}
+.nm-left{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
 .nm-coin{font-size:14px;font-weight:700;flex-shrink:0}
+.nm-count{font-size:9px;color:var(--dim);background:var(--card2);
+          border:1px solid var(--line);border-radius:10px;padding:1px 5px;flex-shrink:0}
 .nm-why{font-size:10.5px;color:var(--dim);
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .nm-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .25s}
 .nm-body.open{max-height:320px;padding-bottom:10px}
-.chevron{color:var(--dim);font-size:12px;transition:transform .2s;flex-shrink:0}
+.chevron{color:var(--dim);font-size:12px;transition:transform .2s}
 .chevron.open{transform:rotate(180deg)}
-.nm-ts{color:var(--dim);font-size:10px;flex-shrink:0}
 
 /* position cards */
 .pos-card{background:var(--card);border:1px solid var(--line);
@@ -118,17 +120,17 @@ body{background:var(--bg);color:var(--txt);
 .pos-top{display:flex;align-items:center;justify-content:space-between}
 .pos-meta{color:var(--dim);font-size:11px;margin-top:4px;
           display:flex;justify-content:space-between}
+.pos-age{color:var(--warn);font-size:10px;margin-top:3px}
 .pbar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:7px}
-.pbar{height:3px;border-radius:2px;transition:width .5s}
+.pbar{height:3px;border-radius:2px}
 
-/* stand-down bar chart */
+/* stand-down bars */
 .sd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .sd-coin{font-size:12px;font-weight:600;min-width:40px}
 .sd-bar-bg{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
 .sd-bar{height:6px;background:var(--acc);border-radius:3px;opacity:.55}
 .sd-count{font-size:11px;color:var(--dim);min-width:22px;text-align:right}
 
-/* empty / loading */
 .empty{color:var(--dim);font-size:13px;text-align:center;padding:24px 0}
 #loader{display:flex;flex-direction:column;align-items:center;
         justify-content:center;min-height:60vh;gap:12px;color:var(--dim)}
@@ -156,46 +158,47 @@ body{background:var(--bg);color:var(--txt);
 const $ = id => document.getElementById(id);
 
 const ANALYST_LABELS = {
-  technical: 'Charts', volume: 'Volume', order_book: 'Order Book',
-  on_chain: 'On-Chain', sentiment: 'Sentiment',
+  technical:'Charts', volume:'Volume', order_book:'Order Book',
+  on_chain:'On-Chain', sentiment:'Sentiment',
 };
 
-let currentDate = new Date().toISOString().slice(0, 10);
+let currentDate = new Date().toISOString().slice(0,10);
 
-function fmtDate(d) {
-  return new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB',
-    {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+function fmtDate(d){
+  return new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',
+    {weekday:'short',day:'numeric',month:'short',year:'numeric'});
 }
-function fmtTS(iso) {
-  if (!iso) return '';
+function fmtTS(iso){
+  if(!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'})
-       + ' at ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})
+       + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
-function fmtUSD(n) {
-  if (n == null) return '—';
-  return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+function fmtUSD(n){
+  if(n==null) return '—';
+  return '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtAge(unixTs){
+  if(!unixTs) return '';
+  const s = Date.now()/1000 - unixTs;
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  return h>0 ? `opened ${h}h ${m}m ago` : `opened ${m}m ago`;
 }
 
-// ── fetch & render ────────────────────────────────────────────────────────────
-async function load(date) {
-  $('loader').style.display = 'flex';
-  $('app').style.display = 'none';
-  $('date-label').textContent = fmtDate(date);
+async function load(date){
+  $('loader').style.display='flex';
+  $('app').style.display='none';
+  $('date-label').textContent=fmtDate(date);
   let data;
-  try {
-    data = await fetch(`/api/daily_report?date=${date}`).then(r => r.json());
-  } catch(e) {
-    $('loader').innerHTML = '<span style="color:var(--dn)">Failed to load report</span>';
-    return;
-  }
-  currentDate = date;
-  $('loader').style.display = 'none';
-  $('app').style.display = 'block';
-  $('app').innerHTML = render(data);
+  try{ data = await fetch(`/api/daily_report?date=${date}`).then(r=>r.json()); }
+  catch(e){ $('loader').innerHTML='<span style="color:var(--dn)">Failed to load report</span>'; return; }
+  currentDate=date;
+  $('loader').style.display='none';
+  $('app').style.display='block';
+  $('app').innerHTML=render(data);
 }
 
-function render(d) {
+function render(d){
   return `
     ${renderSummary(d)}
     <div class="sep"></div>
@@ -212,26 +215,44 @@ function render(d) {
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
-function renderSummary(d) {
-  const pos   = d.equity_delta != null && d.equity_delta >= 0;
-  const col   = d.equity_delta == null ? 'var(--dim)' : pos ? 'var(--up)' : 'var(--dn)';
-  const sign  = d.equity_delta == null ? '' : pos ? '+' : '-';
-  const pct   = d.equity_delta_pct != null ? Math.abs(d.equity_delta_pct) + '%' : '—';
+function renderSummary(d){
+  const pos  = d.equity_delta!=null && d.equity_delta>=0;
+  const col  = d.equity_delta==null?'var(--dim)':pos?'var(--up)':'var(--dn)';
+  const sign = d.equity_delta==null?'':pos?'+':'-';
+  const pct  = d.equity_delta_pct!=null ? Math.abs(d.equity_delta_pct)+'%' : '—';
+
+  // Realized P&L row
+  let pnlRow = '';
+  if(d.realized_usd !== undefined){
+    const rPos  = d.realized_usd >= 0;
+    const rCol  = rPos ? 'var(--up)' : 'var(--dn)';
+    const rSign = rPos ? '+' : '-';
+    const wl    = d.wins_today || d.losses_today
+      ? ` (${d.wins_today} win${d.wins_today!==1?'s':''}, ${d.losses_today} loss${d.losses_today!==1?'es':''})`
+      : '';
+    pnlRow = `
+    <div class="pnl-row">
+      <span class="pnl-label">Realized P&amp;L from closed trades${wl}</span>
+      <span class="pnl-val" style="color:${rCol}">${rSign}${fmtUSD(d.realized_usd)}</span>
+    </div>`;
+  }
+
   return `
   <div class="hero-card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div class="hero-top">
       <div>
-        <div class="lab" style="margin-bottom:4px">Account change today</div>
-        <div class="eq-row">
-          <div class="eq-num" style="color:${col}">${sign}${fmtUSD(d.equity_delta)}</div>
-          <div class="eq-delta" style="color:${col}">${sign}${pct}</div>
+        <div class="lab" style="margin-bottom:3px">Account change today</div>
+        <div>
+          <span class="eq-num" style="color:${col}">${sign}${fmtUSD(d.equity_delta)}</span>
+          <span class="eq-pct" style="color:${col}">${sign}${pct}</span>
         </div>
-        <div class="eq-sub">${d.equity_start != null
-          ? fmtUSD(d.equity_start) + ' at start → ' + fmtUSD(d.equity_end) + ' now'
+        <div class="eq-sub">${d.equity_start!=null
+          ? fmtUSD(d.equity_start)+' at start → '+fmtUSD(d.equity_end)+' now'
           : 'No equity data for this day'}</div>
       </div>
-      <span class="regime-pill">${d.regime || '—'} market</span>
+      <span class="regime-pill">${d.regime||'—'} market</span>
     </div>
+    ${pnlRow}
     <div class="stat-row">
       <div class="sbox"><div class="sval" style="color:var(--acc)">${d.entries.length}</div><div class="slab">Opened</div></div>
       <div class="sbox"><div class="sval" style="color:var(--dim)">${d.exits.length}</div><div class="slab">Closed</div></div>
@@ -242,23 +263,25 @@ function renderSummary(d) {
 }
 
 // ── Entries ───────────────────────────────────────────────────────────────────
-function renderEntries(entries) {
+function renderEntries(entries){
   const cards = !entries.length
     ? '<div class="empty">No positions were opened today</div>'
     : entries.map(e => {
-        const isShort  = e.action === 'ENTRY_SELL';
-        const cls      = isShort ? 'short' : 'long';
-        const tagCls   = isShort ? 'tag-short' : 'tag-long';
-        const tagLabel = isShort ? 'Went Short' : 'Went Long';
-        const barCol   = isShort ? 'var(--warn)' : 'var(--acc)';
-        const conf     = Math.round((e.confidence || 0) * 100);
+        const isShort = e.action==='ENTRY_SELL';
+        const cls     = isShort?'short':'long';
+        const tagCls  = isShort?'tag-short':'tag-long';
+        const tagLbl  = isShort?'Went Short':'Went Long';
+        const barCol  = isShort?'var(--warn)':'var(--acc)';
+        const conf    = Math.round((e.confidence||0)*100);
+        const strat   = parseStrategy(e.reasoning||'');
         return `
         <div class="entry-card ${cls}">
           <div class="card-head">
             <div>
-              <div style="display:flex;align-items:center;gap:8px">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
                 <span class="coin-name">${e.coin}</span>
-                <span class="tag ${tagCls}">${tagLabel}</span>
+                <span class="tag ${tagCls}">${tagLbl}</span>
+                ${strat ? `<span class="tag tag-strat">${strat}</span>` : ''}
               </div>
               <div class="ts">${fmtTS(e.timestamp)}</div>
             </div>
@@ -267,63 +290,59 @@ function renderEntries(entries) {
             </div>
           </div>
           <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barCol}"></div></div>
-          ${renderAnalysts(e.analysts || [])}
-          <div class="reasoning">${parseReasoning(e.reasoning || '')}</div>
+          ${renderAnalysts(e.analysts||[])}
+          <div class="reasoning">${parseReasoning(e.reasoning||'')}</div>
         </div>`;
       }).join('');
   return `<div class="lab">Positions Opened</div>${cards}`;
 }
 
-function renderAnalysts(analysts) {
-  if (!analysts.length) return '';
-  return `<div class="analyst-grid">${analysts.map(a => {
-    const label = ANALYST_LABELS[a.a] || a.a;
-    const v = a.v || 'neutral';
-    const c = Math.round((a.c || 0) * 100);
-    const vLabel = v === 'bullish' ? 'Bullish' : v === 'bearish' ? 'Bearish' : 'Neutral';
+function parseStrategy(r){
+  const m = r.match(/strategy=([^\s;]+)/);
+  return (m && m[1] && m[1]!=='none') ? m[1] : '';
+}
+
+function renderAnalysts(analysts){
+  if(!analysts.length) return '';
+  return `<div class="analyst-grid">${analysts.map(a=>{
+    const label = ANALYST_LABELS[a.a]||a.a;
+    const v = a.v||'neutral';
+    const c = Math.round((a.c||0)*100);
     return `<div class="av">
       <div class="av-name">${label}</div>
-      <div class="av-verdict ${v}">${vLabel}</div>
+      <div class="av-verdict ${v}">${v==='bullish'?'Bullish':v==='bearish'?'Bearish':'Neutral'}</div>
       <div class="av-conf">${c}% sure</div>
     </div>`;
   }).join('')}</div>`;
 }
 
-function parseReasoning(r) {
-  const regime = r.match(/regime=([^\s;(]+)/);
-  const score  = r.match(/blended_score=([^\s;]+)/);
-  const ceo    = r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
-  const agree  = r.match(/agree=(True|False)/);
-
+function parseReasoning(r){
   const parts = [];
+  const regime   = r.match(/regime=([^\s;(]+)/);
+  const score    = r.match(/blended_score=([^\s;]+)/);
+  const ceo      = r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
+  const agree    = r.match(/agree=(True|False)/);
 
-  if (regime) {
-    const rm = regime[1].replace('_', ' ');
-    parts.push(`<b>Market:</b> ${rm.charAt(0).toUpperCase() + rm.slice(1)}`);
-  }
-  if (score) {
-    const s = parseFloat(score[1]);
-    const dir = s > 0.1 ? 'bullish lean' : s < -0.1 ? 'bearish lean' : 'neutral';
+  if(regime){ const rm=regime[1].replace('_',' '); parts.push(`<b>Market:</b> ${rm.charAt(0).toUpperCase()+rm.slice(1)}`); }
+  if(score){
+    const s=parseFloat(score[1]);
+    const dir=s>0.1?'bullish lean':s<-0.1?'bearish lean':'neutral';
     parts.push(`<b>Overall signal:</b> ${score[1]} (${dir})`);
   }
-  if (ceo) {
-    const direction = ceo[1];
-    const conf = Math.round(parseFloat(ceo[2]) * 100);
-    parts.push(`<b>System decision:</b> ${direction.charAt(0).toUpperCase() + direction.slice(1)} (${conf}% confident)`);
+  if(ceo){
+    const dir=ceo[1], conf=Math.round(parseFloat(ceo[2])*100);
+    parts.push(`<b>System decision:</b> ${dir.charAt(0).toUpperCase()+dir.slice(1)} (${conf}% confident)`);
   }
-  if (agree) {
-    parts.push(`<b>Analysts:</b> ${agree[1] === 'True' ? 'were in agreement' : 'were split'}`);
-  }
-
+  if(agree) parts.push(`<b>Analysts:</b> ${agree[1]==='True'?'were in agreement':'were split'}`);
   return parts.length ? parts.join('&ensp;·&ensp;') : r;
 }
 
 // ── Exits ─────────────────────────────────────────────────────────────────────
-function renderExits(exits) {
+function renderExits(exits){
   const cards = !exits.length
     ? '<div class="empty">No positions were closed today</div>'
-    : exits.map(e => {
-        const oc = e.outcome === 'profit' ? 'tag-profit' : e.outcome === 'loss' ? 'tag-loss' : 'tag-neutral';
+    : exits.map(e=>{
+        const oc = e.outcome==='profit'?'tag-profit':e.outcome==='loss'?'tag-loss':'tag-neutral';
         return `
         <div class="exit-card">
           <div class="exit-top">
@@ -339,74 +358,75 @@ function renderExits(exits) {
 }
 
 // ── Near Misses ───────────────────────────────────────────────────────────────
-function renderNearMisses(nms) {
-  if (!nms.length) {
+function renderNearMisses(nms){
+  if(!nms.length){
     return `<div class="lab">Signals Considered But Not Taken</div>
             <div class="empty">All other signals were low confidence</div>`;
   }
-  const cards = nms.map((d, i) => {
-    const conf = Math.round((d.confidence || 0) * 100);
-    const why  = shortReason(d.reasoning || '');
+  const cards = nms.map((d,i)=>{
+    const conf = Math.round((d.confidence||0)*100);
+    const why  = shortReason(d.reasoning||'');
+    const strat = parseStrategy(d.reasoning||'');
     return `
     <div class="nm-card">
       <div class="nm-head" onclick="toggleNM(${i})">
         <div class="nm-left">
           <span class="nm-coin">${d.coin}</span>
+          ${d.nm_count>1 ? `<span class="nm-count">×${d.nm_count}</span>` : ''}
           <span class="nm-why">${why}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <span class="nm-ts">${fmtTS(d.timestamp)}</span>
+        <div class="nm-right">
           <span style="font-size:12px;color:var(--warn)">${conf}%</span>
           <span class="chevron" id="chev-${i}">▾</span>
         </div>
       </div>
       <div class="nm-body" id="nm-body-${i}">
-        ${renderAnalysts(d.analysts || [])}
-        <div class="reasoning" style="margin-top:7px">${parseReasoning(d.reasoning || '')}</div>
+        <div class="ts" style="margin-bottom:6px">${fmtTS(d.timestamp)}${strat?' · '+strat:''}</div>
+        ${renderAnalysts(d.analysts||[])}
+        <div class="reasoning" style="margin-top:7px">${parseReasoning(d.reasoning||'')}</div>
       </div>
     </div>`;
   }).join('');
-  return `<div class="lab">Signals Considered But Not Taken <span style="font-size:9px;font-weight:400">(confidence ≥ 45%)</span></div>${cards}`;
+  return `<div class="lab">Signals Considered But Not Taken <span style="font-size:9px;font-weight:400">(confidence ≥ 45%, one per coin)</span></div>${cards}`;
 }
 
-function shortReason(r) {
+function shortReason(r){
   const ceo   = r.match(/ceo=([^\s;(]+)/);
   const agree = r.match(/agree=(True|False)/);
-  if (!ceo) return 'Signal too weak to enter';
+  if(!ceo) return 'Signal too weak to enter';
   const dir   = ceo[1];
-  const split = agree && agree[1] === 'False' ? ', analysts split' : '';
+  const split = agree&&agree[1]==='False' ? ', analysts split' : '';
   return `System was ${dir}${split} — not confident enough to trade`;
 }
 
-function toggleNM(i) {
-  document.getElementById('nm-body-' + i).classList.toggle('open');
-  document.getElementById('chev-' + i).classList.toggle('open');
+function toggleNM(i){
+  document.getElementById('nm-body-'+i).classList.toggle('open');
+  document.getElementById('chev-'+i).classList.toggle('open');
 }
 
 // ── Open Positions ────────────────────────────────────────────────────────────
-function renderOpenPositions(positions) {
-  if (!positions || !positions.length) {
+function renderOpenPositions(positions){
+  if(!positions||!positions.length)
     return `<div class="lab">Currently Open (live)</div><div class="empty">No open positions right now</div>`;
-  }
-  const cards = positions.map(p => {
-    const pnl  = p.unrealised_pnl_pct || 0;
-    const col  = pnl >= 0 ? 'var(--up)' : 'var(--dn)';
-    const side = p.side === 'SHORT' ? 'tag-short' : 'tag-long';
-    const barW = Math.min(Math.abs(pnl) * 4, 100);
-    const pnlLabel = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%';
+  const cards = positions.map(p=>{
+    const pnl  = p.unrealised_pnl_pct||0;
+    const col  = pnl>=0?'var(--up)':'var(--dn)';
+    const side = p.side==='SHORT'?'tag-short':'tag-long';
+    const barW = Math.min(Math.abs(pnl)*4,100);
     return `
     <div class="pos-card">
       <div class="pos-top">
         <div style="display:flex;align-items:center;gap:7px">
           <span style="font-size:15px;font-weight:700">${p.coin}</span>
-          <span class="tag ${side}">${p.side === 'SHORT' ? 'Short' : 'Long'}</span>
+          <span class="tag ${side}">${p.side==='SHORT'?'Short':'Long'}</span>
         </div>
-        <span style="font-size:15px;font-weight:700;color:${col}">${pnlLabel}</span>
+        <span style="font-size:15px;font-weight:700;color:${col}">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span>
       </div>
       <div class="pos-meta">
-        <span>Entered at $${p.entry_price != null ? p.entry_price.toLocaleString() : '—'}</span>
-        <span>Now $${p.current_price != null ? p.current_price.toLocaleString() : '—'}</span>
+        <span>Entered at $${p.entry_price!=null?p.entry_price.toLocaleString():'—'}</span>
+        <span>Now $${p.current_price!=null?p.current_price.toLocaleString():'—'}</span>
       </div>
+      <div class="pos-age">${fmtAge(p.opened_at)}</div>
       <div class="pbar-bg"><div class="pbar" style="width:${barW}%;background:${col}"></div></div>
     </div>`;
   }).join('');
@@ -414,12 +434,11 @@ function renderOpenPositions(positions) {
 }
 
 // ── Stand-Down Chart ──────────────────────────────────────────────────────────
-function renderStandDowns(byCoins, total) {
-  if (!byCoins || !Object.keys(byCoins).length) {
+function renderStandDowns(byCoins, total){
+  if(!byCoins||!Object.keys(byCoins).length)
     return `<div class="lab">Coins Reviewed But Skipped</div><div class="empty">No data</div>`;
-  }
   const max  = Math.max(...Object.values(byCoins));
-  const rows = Object.entries(byCoins).map(([coin, n]) => `
+  const rows = Object.entries(byCoins).map(([coin,n])=>`
     <div class="sd-row">
       <span class="sd-coin">${coin}</span>
       <div class="sd-bar-bg"><div class="sd-bar" style="width:${Math.round(n/max*100)}%"></div></div>
@@ -431,17 +450,17 @@ function renderStandDowns(byCoins, total) {
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
-function offsetDate(date, days) {
-  const d = new Date(date + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+function offsetDate(date,days){
+  const d=new Date(date+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()+days);
+  return d.toISOString().slice(0,10);
 }
-$('btn-prev').onclick  = () => load(offsetDate(currentDate, -1));
-$('btn-next').onclick  = () => load(offsetDate(currentDate, +1));
-$('btn-today').onclick = () => load(new Date().toISOString().slice(0, 10));
+$('btn-prev').onclick  = ()=>load(offsetDate(currentDate,-1));
+$('btn-next').onclick  = ()=>load(offsetDate(currentDate,+1));
+$('btn-today').onclick = ()=>load(new Date().toISOString().slice(0,10));
 
 const urlDate = new URLSearchParams(location.search).get('date');
-load(urlDate || new Date().toISOString().slice(0, 10));
+load(urlDate||new Date().toISOString().slice(0,10));
 </script>
 </body>
 </html>
