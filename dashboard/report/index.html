@@ -49,44 +49,52 @@ body{background:var(--bg);color:var(--txt);
 .sval{font-size:18px;font-weight:700;line-height:1.1}
 .slab{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
 
-/* generic cards */
+/* generic card */
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
       padding:12px;margin-bottom:8px}
+
+/* entry cards — coloured left border to distinguish from everything else */
+.entry-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+            padding:12px;margin-bottom:8px;border-left-width:3px}
+.entry-card.long {border-left-color:var(--acc);  background:#0f1620}
+.entry-card.short{border-left-color:var(--warn); background:#110e05}
+
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .coin-name{font-size:16px;font-weight:700;letter-spacing:.2px}
-.coin-time{color:var(--dim);font-size:11px}
+.ts{color:var(--dim);font-size:11px;margin-top:2px}
 .conf-bar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:8px}
 .conf-bar{height:3px;border-radius:2px}
-.reasoning{font-size:11.5px;color:var(--dim);margin-top:7px;line-height:1.55;
-           padding:7px 8px;background:var(--card2);border-radius:7px;border:1px solid var(--line)}
+.reasoning{font-size:12px;color:var(--txt);margin-top:7px;line-height:1.6;
+           padding:8px 10px;background:var(--card2);border-radius:7px;border:1px solid var(--line)}
+.reasoning b{color:var(--dim);font-weight:500}
 
 /* analyst grid */
 .analyst-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
 .av{background:var(--card2);border:1px solid var(--line);border-radius:7px;
     padding:5px 4px;text-align:center}
-.av-name{font-size:8.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
+.av-name{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px}
 .av-verdict{font-size:10.5px;font-weight:700;margin-top:2px}
 .av-conf{font-size:9px;color:var(--dim);margin-top:1px}
 .bullish{color:var(--up)}.bearish{color:var(--dn)}.neutral{color:var(--dim)}
 
-/* direction / outcome tags */
+/* tags */
 .tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;
      border-radius:4px;letter-spacing:.4px}
-.tag-long  {color:var(--acc);background:#13233a;border:1px solid #1e3a5c}
-.tag-short {color:var(--warn);background:#332608;border:1px solid #4d3a0d}
-.tag-profit{color:var(--up);background:#0d2617;border:1px solid #1d3b27}
-.tag-loss  {color:var(--dn);background:#2e1212;border:1px solid #46211f}
+.tag-long   {color:var(--acc);background:#13233a;border:1px solid #1e3a5c}
+.tag-short  {color:var(--warn);background:#332608;border:1px solid #4d3a0d}
+.tag-profit {color:var(--up);background:#0d2617;border:1px solid #1d3b27}
+.tag-loss   {color:var(--dn);background:#2e1212;border:1px solid #46211f}
 .tag-neutral{color:var(--dim);background:var(--card2);border:1px solid var(--line)}
 .regime-pill{font-size:10px;padding:2px 8px;border-radius:20px;
-             background:var(--card2);border:1px solid var(--line);color:var(--dim)}
+             background:var(--card2);border:1px solid var(--line);color:var(--dim);
+             text-transform:capitalize}
 
 /* exit cards */
-.exit-card{display:flex;align-items:center;justify-content:space-between;
-           background:var(--card);border:1px solid var(--line);
+.exit-card{background:var(--card);border:1px solid var(--line);
            border-radius:10px;padding:10px 12px;margin-bottom:7px}
-.exit-left{display:flex;align-items:center;gap:8px}
+.exit-top{display:flex;align-items:center;justify-content:space-between}
 .exit-coin{font-size:15px;font-weight:700}
-.exit-time{color:var(--dim);font-size:10.5px}
+.exit-ts{color:var(--dim);font-size:10.5px;margin-top:3px}
 
 /* near miss — collapsible */
 .nm-card{background:var(--card);border:1px solid var(--line);
@@ -94,14 +102,15 @@ body{background:var(--bg);color:var(--txt);
 .nm-head{display:flex;align-items:center;justify-content:space-between;
          padding:10px 12px;cursor:pointer;gap:8px}
 .nm-head:active{opacity:.7}
-.nm-left{display:flex;align-items:center;gap:8px}
-.nm-coin{font-size:14px;font-weight:700}
-.nm-why{font-size:10.5px;color:var(--dim);max-width:180px;
+.nm-left{display:flex;align-items:center;gap:8px;min-width:0}
+.nm-coin{font-size:14px;font-weight:700;flex-shrink:0}
+.nm-why{font-size:10.5px;color:var(--dim);
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nm-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .2s}
-.nm-body.open{max-height:300px;padding-bottom:10px}
+.nm-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .25s}
+.nm-body.open{max-height:320px;padding-bottom:10px}
 .chevron{color:var(--dim);font-size:12px;transition:transform .2s;flex-shrink:0}
 .chevron.open{transform:rotate(180deg)}
+.nm-ts{color:var(--dim);font-size:10px;flex-shrink:0}
 
 /* position cards */
 .pos-card{background:var(--card);border:1px solid var(--line);
@@ -116,13 +125,11 @@ body{background:var(--bg);color:var(--txt);
 .sd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .sd-coin{font-size:12px;font-weight:600;min-width:40px}
 .sd-bar-bg{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
-.sd-bar{height:6px;background:var(--acc);border-radius:3px;opacity:.6}
+.sd-bar{height:6px;background:var(--acc);border-radius:3px;opacity:.55}
 .sd-count{font-size:11px;color:var(--dim);min-width:22px;text-align:right}
 
-/* empty state */
+/* empty / loading */
 .empty{color:var(--dim);font-size:13px;text-align:center;padding:24px 0}
-
-/* loading */
 #loader{display:flex;flex-direction:column;align-items:center;
         justify-content:center;min-height:60vh;gap:12px;color:var(--dim)}
 .spinner{width:28px;height:28px;border:2px solid var(--line);
@@ -148,22 +155,22 @@ body{background:var(--bg);color:var(--txt);
 <script>
 const $ = id => document.getElementById(id);
 
-// ── brand colours for analyst names ──────────────────────────────────────────
 const ANALYST_LABELS = {
-  technical: 'Tech', volume: 'Vol', order_book: 'OB',
-  on_chain: 'Chain', sentiment: 'News',
+  technical: 'Charts', volume: 'Volume', order_book: 'Order Book',
+  on_chain: 'On-Chain', sentiment: 'Sentiment',
 };
 
-// ── date state ────────────────────────────────────────────────────────────────
-let currentDate = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD UTC
+let currentDate = new Date().toISOString().slice(0, 10);
 
 function fmtDate(d) {
-  const dt = new Date(d + 'T12:00:00Z');
-  return dt.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+  return new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB',
+    {weekday:'short', day:'numeric', month:'short', year:'numeric'});
 }
-function fmtTime(iso) {
+function fmtTS(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'})
+       + ' at ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 }
 function fmtUSD(n) {
   if (n == null) return '—';
@@ -175,21 +182,17 @@ async function load(date) {
   $('loader').style.display = 'flex';
   $('app').style.display = 'none';
   $('date-label').textContent = fmtDate(date);
-
   let data;
   try {
-    const r = await fetch(`/api/daily_report?date=${date}`);
-    data = await r.json();
+    data = await fetch(`/api/daily_report?date=${date}`).then(r => r.json());
   } catch(e) {
     $('loader').innerHTML = '<span style="color:var(--dn)">Failed to load report</span>';
     return;
   }
-
   currentDate = date;
   $('loader').style.display = 'none';
   $('app').style.display = 'block';
   $('app').innerHTML = render(data);
-  wireNearMisses();
 }
 
 function render(d) {
@@ -210,63 +213,65 @@ function render(d) {
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 function renderSummary(d) {
-  const dPos = d.equity_delta != null && d.equity_delta >= 0;
-  const dCol = d.equity_delta == null ? 'var(--dim)' : dPos ? 'var(--up)' : 'var(--dn)';
-  const dSign = d.equity_delta == null ? '' : dPos ? '+' : '-';
-  const dStr  = d.equity_delta == null ? '—' : `${dSign}${fmtUSD(d.equity_delta)} (${dSign}${Math.abs(d.equity_delta_pct)}%)`;
-
+  const pos   = d.equity_delta != null && d.equity_delta >= 0;
+  const col   = d.equity_delta == null ? 'var(--dim)' : pos ? 'var(--up)' : 'var(--dn)';
+  const sign  = d.equity_delta == null ? '' : pos ? '+' : '-';
+  const pct   = d.equity_delta_pct != null ? Math.abs(d.equity_delta_pct) + '%' : '—';
   return `
   <div class="hero-card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <div class="lab" style="margin-bottom:4px">Equity change</div>
+        <div class="lab" style="margin-bottom:4px">Account change today</div>
         <div class="eq-row">
-          <div class="eq-num" style="color:${dCol}">${dSign}${fmtUSD(d.equity_delta)}</div>
-          <div class="eq-delta" style="color:${dCol}">${dSign}${d.equity_delta_pct != null ? Math.abs(d.equity_delta_pct) + '%' : '—'}</div>
+          <div class="eq-num" style="color:${col}">${sign}${fmtUSD(d.equity_delta)}</div>
+          <div class="eq-delta" style="color:${col}">${sign}${pct}</div>
         </div>
-        <div class="eq-sub">${d.equity_start != null ? fmtUSD(d.equity_start) + ' → ' + fmtUSD(d.equity_end) : 'No equity data for this day'}</div>
+        <div class="eq-sub">${d.equity_start != null
+          ? fmtUSD(d.equity_start) + ' at start → ' + fmtUSD(d.equity_end) + ' now'
+          : 'No equity data for this day'}</div>
       </div>
-      <span class="regime-pill">${d.regime || '—'}</span>
+      <span class="regime-pill">${d.regime || '—'} market</span>
     </div>
     <div class="stat-row">
-      <div class="sbox"><div class="sval" style="color:var(--acc)">${d.entries.length}</div><div class="slab">Entries</div></div>
-      <div class="sbox"><div class="sval" style="color:var(--dim)">${d.exits.length}</div><div class="slab">Exits</div></div>
-      <div class="sbox"><div class="sval" style="color:var(--warn)">${d.near_misses.length}</div><div class="slab">Near Miss</div></div>
-      <div class="sbox"><div class="sval">${d.stand_down_total}</div><div class="slab">Stood Down</div></div>
+      <div class="sbox"><div class="sval" style="color:var(--acc)">${d.entries.length}</div><div class="slab">Opened</div></div>
+      <div class="sbox"><div class="sval" style="color:var(--dim)">${d.exits.length}</div><div class="slab">Closed</div></div>
+      <div class="sbox"><div class="sval" style="color:var(--warn)">${d.near_misses.length}</div><div class="slab">Considered</div></div>
+      <div class="sbox"><div class="sval">${d.stand_down_total}</div><div class="slab">Skipped</div></div>
     </div>
   </div>`;
 }
 
 // ── Entries ───────────────────────────────────────────────────────────────────
 function renderEntries(entries) {
-  const cards = entries.length === 0
-    ? '<div class="empty">No entries this day</div>'
+  const cards = !entries.length
+    ? '<div class="empty">No positions were opened today</div>'
     : entries.map(e => {
-        const isShort = e.action === 'ENTRY_SELL';
-        const tagClass = isShort ? 'tag-short' : 'tag-long';
-        const tagLabel = isShort ? 'SHORT' : 'LONG';
+        const isShort  = e.action === 'ENTRY_SELL';
+        const cls      = isShort ? 'short' : 'long';
+        const tagCls   = isShort ? 'tag-short' : 'tag-long';
+        const tagLabel = isShort ? 'Went Short' : 'Went Long';
         const barCol   = isShort ? 'var(--warn)' : 'var(--acc)';
         const conf     = Math.round((e.confidence || 0) * 100);
-        const analysts = renderAnalysts(e.analysts || []);
-        const reasoning = parseReasoning(e.reasoning || '');
         return `
-        <div class="card">
+        <div class="entry-card ${cls}">
           <div class="card-head">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="coin-name">${e.coin}</span>
-              <span class="tag ${tagClass}">${tagLabel}</span>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="coin-name">${e.coin}</span>
+                <span class="tag ${tagCls}">${tagLabel}</span>
+              </div>
+              <div class="ts">${fmtTS(e.timestamp)}</div>
             </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:700">${conf}% conf</div>
-              <div class="coin-time">${fmtTime(e.timestamp)}</div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:13px;font-weight:700">${conf}% confident</div>
             </div>
           </div>
           <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barCol}"></div></div>
-          ${analysts}
-          <div class="reasoning">${reasoning}</div>
+          ${renderAnalysts(e.analysts || [])}
+          <div class="reasoning">${parseReasoning(e.reasoning || '')}</div>
         </div>`;
       }).join('');
-  return `<div class="lab">Trades Entered</div>${cards}`;
+  return `<div class="lab">Positions Opened</div>${cards}`;
 }
 
 function renderAnalysts(analysts) {
@@ -275,57 +280,73 @@ function renderAnalysts(analysts) {
     const label = ANALYST_LABELS[a.a] || a.a;
     const v = a.v || 'neutral';
     const c = Math.round((a.c || 0) * 100);
+    const vLabel = v === 'bullish' ? 'Bullish' : v === 'bearish' ? 'Bearish' : 'Neutral';
     return `<div class="av">
       <div class="av-name">${label}</div>
-      <div class="av-verdict ${v}">${v.charAt(0).toUpperCase() + v.slice(1)}</div>
-      <div class="av-conf">${c}%</div>
+      <div class="av-verdict ${v}">${vLabel}</div>
+      <div class="av-conf">${c}% sure</div>
     </div>`;
   }).join('')}</div>`;
 }
 
 function parseReasoning(r) {
-  // Extract structured fields from the reasoning string
-  const parts = [];
-  const regime = r.match(/regime=([^\s;]+)/);
+  const regime = r.match(/regime=([^\s;(]+)/);
   const score  = r.match(/blended_score=([^\s;]+)/);
   const ceo    = r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
   const agree  = r.match(/agree=(True|False)/);
-  if (regime) parts.push(`<b>Regime:</b> ${regime[1]}`);
-  if (score)  parts.push(`<b>Blended score:</b> ${score[1]}`);
-  if (ceo)    parts.push(`<b>CEO:</b> ${ceo[1]} (${Math.round(parseFloat(ceo[2])*100)}% conf)`);
-  if (agree)  parts.push(`<b>Analysts agree:</b> ${agree[1]}`);
-  return parts.length ? parts.join(' · ') : r;
+
+  const parts = [];
+
+  if (regime) {
+    const rm = regime[1].replace('_', ' ');
+    parts.push(`<b>Market:</b> ${rm.charAt(0).toUpperCase() + rm.slice(1)}`);
+  }
+  if (score) {
+    const s = parseFloat(score[1]);
+    const dir = s > 0.1 ? 'bullish lean' : s < -0.1 ? 'bearish lean' : 'neutral';
+    parts.push(`<b>Overall signal:</b> ${score[1]} (${dir})`);
+  }
+  if (ceo) {
+    const direction = ceo[1];
+    const conf = Math.round(parseFloat(ceo[2]) * 100);
+    parts.push(`<b>System decision:</b> ${direction.charAt(0).toUpperCase() + direction.slice(1)} (${conf}% confident)`);
+  }
+  if (agree) {
+    parts.push(`<b>Analysts:</b> ${agree[1] === 'True' ? 'were in agreement' : 'were split'}`);
+  }
+
+  return parts.length ? parts.join('&ensp;·&ensp;') : r;
 }
 
 // ── Exits ─────────────────────────────────────────────────────────────────────
 function renderExits(exits) {
-  const cards = exits.length === 0
-    ? '<div class="empty">No exits this day</div>'
+  const cards = !exits.length
+    ? '<div class="empty">No positions were closed today</div>'
     : exits.map(e => {
         const oc = e.outcome === 'profit' ? 'tag-profit' : e.outcome === 'loss' ? 'tag-loss' : 'tag-neutral';
         return `
         <div class="exit-card">
-          <div class="exit-left">
-            <span class="exit-coin">${e.coin}</span>
-            <span class="tag ${oc}">${e.label}</span>
+          <div class="exit-top">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="exit-coin">${e.coin}</span>
+              <span class="tag ${oc}">${e.label}</span>
+            </div>
           </div>
-          <span class="exit-time">${fmtTime(e.timestamp)}</span>
+          <div class="exit-ts">${fmtTS(e.timestamp)}</div>
         </div>`;
       }).join('');
-  return `<div class="lab">Exits</div>${cards}`;
+  return `<div class="lab">Positions Closed</div>${cards}`;
 }
 
 // ── Near Misses ───────────────────────────────────────────────────────────────
 function renderNearMisses(nms) {
   if (!nms.length) {
-    return `<div class="lab">Near Misses <span style="font-size:9px;font-weight:400">(conf ≥ 45%)</span></div>
-            <div class="empty">None — all stands were low confidence</div>`;
+    return `<div class="lab">Signals Considered But Not Taken</div>
+            <div class="empty">All other signals were low confidence</div>`;
   }
   const cards = nms.map((d, i) => {
     const conf = Math.round((d.confidence || 0) * 100);
-    const why = shortReason(d.reasoning || '');
-    const analysts = renderAnalysts(d.analysts || []);
-    const reasoning = parseReasoning(d.reasoning || '');
+    const why  = shortReason(d.reasoning || '');
     return `
     <div class="nm-card">
       <div class="nm-head" onclick="toggleNM(${i})">
@@ -334,77 +355,78 @@ function renderNearMisses(nms) {
           <span class="nm-why">${why}</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span class="nm-ts">${fmtTS(d.timestamp)}</span>
           <span style="font-size:12px;color:var(--warn)">${conf}%</span>
           <span class="chevron" id="chev-${i}">▾</span>
         </div>
       </div>
       <div class="nm-body" id="nm-body-${i}">
-        ${analysts}
-        <div class="reasoning" style="margin-top:7px">${reasoning}</div>
+        ${renderAnalysts(d.analysts || [])}
+        <div class="reasoning" style="margin-top:7px">${parseReasoning(d.reasoning || '')}</div>
       </div>
     </div>`;
   }).join('');
-  return `<div class="lab">Near Misses <span style="font-size:9px;font-weight:400">(conf ≥ 45% but stood down)</span></div>${cards}`;
+  return `<div class="lab">Signals Considered But Not Taken <span style="font-size:9px;font-weight:400">(confidence ≥ 45%)</span></div>${cards}`;
 }
 
 function shortReason(r) {
-  const ceo = r.match(/ceo=([^\s;(]+)/);
-  const score = r.match(/blended_score=([^\s;]+)/);
-  if (ceo && score) return `CEO ${ceo[1]}, score ${score[1]}`;
-  return r.slice(0, 50);
+  const ceo   = r.match(/ceo=([^\s;(]+)/);
+  const agree = r.match(/agree=(True|False)/);
+  if (!ceo) return 'Signal too weak to enter';
+  const dir   = ceo[1];
+  const split = agree && agree[1] === 'False' ? ', analysts split' : '';
+  return `System was ${dir}${split} — not confident enough to trade`;
 }
 
 function toggleNM(i) {
-  const body = document.getElementById('nm-body-' + i);
-  const chev = document.getElementById('chev-' + i);
-  body.classList.toggle('open');
-  chev.classList.toggle('open');
+  document.getElementById('nm-body-' + i).classList.toggle('open');
+  document.getElementById('chev-' + i).classList.toggle('open');
 }
-function wireNearMisses() {}   // onclick handles it inline
 
 // ── Open Positions ────────────────────────────────────────────────────────────
 function renderOpenPositions(positions) {
   if (!positions || !positions.length) {
-    return `<div class="lab">Open Positions (live)</div><div class="empty">No open positions</div>`;
+    return `<div class="lab">Currently Open (live)</div><div class="empty">No open positions right now</div>`;
   }
   const cards = positions.map(p => {
     const pnl  = p.unrealised_pnl_pct || 0;
     const col  = pnl >= 0 ? 'var(--up)' : 'var(--dn)';
     const side = p.side === 'SHORT' ? 'tag-short' : 'tag-long';
     const barW = Math.min(Math.abs(pnl) * 4, 100);
+    const pnlLabel = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%';
     return `
     <div class="pos-card">
       <div class="pos-top">
         <div style="display:flex;align-items:center;gap:7px">
           <span style="font-size:15px;font-weight:700">${p.coin}</span>
-          <span class="tag ${side}">${p.side}</span>
+          <span class="tag ${side}">${p.side === 'SHORT' ? 'Short' : 'Long'}</span>
         </div>
-        <span style="font-size:15px;font-weight:700;color:${col}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%</span>
+        <span style="font-size:15px;font-weight:700;color:${col}">${pnlLabel}</span>
       </div>
       <div class="pos-meta">
-        <span>Entry $${p.entry_price != null ? p.entry_price.toLocaleString() : '—'}</span>
-        <span>Current $${p.current_price != null ? p.current_price.toLocaleString() : '—'}</span>
+        <span>Entered at $${p.entry_price != null ? p.entry_price.toLocaleString() : '—'}</span>
+        <span>Now $${p.current_price != null ? p.current_price.toLocaleString() : '—'}</span>
       </div>
       <div class="pbar-bg"><div class="pbar" style="width:${barW}%;background:${col}"></div></div>
     </div>`;
   }).join('');
-  return `<div class="lab">Open Positions (live)</div>${cards}`;
+  return `<div class="lab">Currently Open (live)</div>${cards}`;
 }
 
 // ── Stand-Down Chart ──────────────────────────────────────────────────────────
 function renderStandDowns(byCoins, total) {
   if (!byCoins || !Object.keys(byCoins).length) {
-    return `<div class="lab">Stand-Down Breakdown</div><div class="empty">No data</div>`;
+    return `<div class="lab">Coins Reviewed But Skipped</div><div class="empty">No data</div>`;
   }
-  const max = Math.max(...Object.values(byCoins));
+  const max  = Math.max(...Object.values(byCoins));
   const rows = Object.entries(byCoins).map(([coin, n]) => `
     <div class="sd-row">
       <span class="sd-coin">${coin}</span>
       <div class="sd-bar-bg"><div class="sd-bar" style="width:${Math.round(n/max*100)}%"></div></div>
-      <span class="sd-count">${n}</span>
+      <span class="sd-count">${n}×</span>
     </div>`).join('');
   return `
-  <div class="lab">Stand-Down Breakdown <span style="font-size:9px;font-weight:400">(${total} total)</span></div>
+  <div class="lab">Coins Reviewed But Skipped <span style="font-size:9px;font-weight:400">(${total} total checks)</span></div>
   <div class="card">${rows}</div>`;
 }
 
@@ -414,12 +436,10 @@ function offsetDate(date, days) {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+$('btn-prev').onclick  = () => load(offsetDate(currentDate, -1));
+$('btn-next').onclick  = () => load(offsetDate(currentDate, +1));
+$('btn-today').onclick = () => load(new Date().toISOString().slice(0, 10));
 
-$('btn-prev').onclick   = () => load(offsetDate(currentDate, -1));
-$('btn-next').onclick   = () => load(offsetDate(currentDate, +1));
-$('btn-today').onclick  = () => load(new Date().toISOString().slice(0, 10));
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 const urlDate = new URLSearchParams(location.search).get('date');
 load(urlDate || new Date().toISOString().slice(0, 10));
 </script>
