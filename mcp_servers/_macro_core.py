@@ -46,6 +46,14 @@ _FIXTURE_DOMINANCE = {
     "btc_dominance": 50.0, "eth_dominance": 15.0, "alt_dominance": 35.0,
     "total_mcap_usd": 0.0, "mcap_change_24h_pct": 0.0, "source": "fixture",
 }
+_FIXTURE_OI  = {coin: {"oi_usd": 0.0, "oi_change_pct": 0.0} for coin in _SYMBOLS}
+_FIXTURE_LS  = {coin: {"long_pct": 0.5, "short_pct": 0.5, "ratio": 1.0} for coin in _SYMBOLS}
+_FIXTURE_TRADFI = {
+    "sp500": {"price": 0.0, "change_pct": 0.0},
+    "vix":   {"price": 20.0, "change_pct": 0.0},
+    "dxy":   {"price": 100.0, "change_pct": 0.0},
+    "gold":  {"price": 0.0, "change_pct": 0.0},
+}
 
 
 def get_fear_greed() -> dict:
@@ -128,6 +136,162 @@ def _fetch_bybit_funding() -> dict:
         return rates
     except Exception:
         return _FIXTURE_FUNDING.copy()
+
+
+_OI_TTL      = 300   # 5 min
+_LS_TTL      = 300   # 5 min
+_TRADFI_TTL  = 1800  # 30 min — yfinance returns daily bars
+
+_oi_cache:      dict = {}
+_ls_cache:      dict = {}
+_tradfi_cache:  dict = {}
+
+_BINANCE_OI_HIST = "https://fapi.binance.com/futures/data/openInterestHist"
+_BINANCE_LS      = "https://fapi.binance.com/futures/data/globalLongShortAccountRatio"
+
+_TRADFI_TICKERS = {
+    "sp500": "^GSPC",
+    "vix":   "^VIX",
+    "dxy":   "DX-Y.NYB",
+    "gold":  "GC=F",
+}
+
+
+def _fetch_oi_one(coin: str, symbol: str) -> tuple:
+    try:
+        r = httpx.get(_BINANCE_OI_HIST,
+                      params={"symbol": symbol, "period": "1h", "limit": 2},
+                      timeout=5.0, headers={"User-Agent": "MiniSim/5 macro-feed"})
+        r.raise_for_status()
+        data = r.json()
+        if data:
+            curr = float(data[-1]["sumOpenInterestValue"])
+            prev = float(data[0]["sumOpenInterestValue"]) if len(data) >= 2 else curr
+            chg  = round((curr - prev) / prev * 100, 2) if prev else 0.0
+            return coin, {"oi_usd": curr, "oi_change_pct": chg}
+    except Exception:
+        pass
+    return coin, {"oi_usd": 0.0, "oi_change_pct": 0.0}
+
+
+def get_open_interest() -> dict:
+    """Return futures open interest (USD) + 1h change % for all tracked coins.
+    {coin: {oi_usd: float, oi_change_pct: float}}
+    """
+    if config.MODE == "fixture":
+        return _FIXTURE_OI.copy()
+
+    now = time.time()
+    if _oi_cache and now - _oi_cache.get("_ts", 0) < _OI_TTL:
+        return {k: v for k, v in _oi_cache.items() if k != "_ts"}
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    result = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = {pool.submit(_fetch_oi_one, coin, sym): coin
+                for coin, sym in _SYMBOLS.items()}
+        for f in as_completed(futs, timeout=15):
+            try:
+                coin, data = f.result()
+                result[coin] = data
+            except Exception:
+                pass
+
+    _oi_cache.clear()
+    _oi_cache.update(result)
+    _oi_cache["_ts"] = now
+    return result
+
+
+def _fetch_ls_one(coin: str, symbol: str) -> tuple:
+    try:
+        r = httpx.get(_BINANCE_LS,
+                      params={"symbol": symbol, "period": "5m", "limit": 1},
+                      timeout=5.0, headers={"User-Agent": "MiniSim/5 macro-feed"})
+        r.raise_for_status()
+        data = r.json()
+        if data:
+            row = data[0]
+            lp = float(row["longAccount"])
+            sp = float(row["shortAccount"])
+            return coin, {"long_pct": round(lp, 4), "short_pct": round(sp, 4),
+                          "ratio": round(float(row["longShortRatio"]), 3)}
+    except Exception:
+        pass
+    return coin, {"long_pct": 0.5, "short_pct": 0.5, "ratio": 1.0}
+
+
+def get_long_short_ratio() -> dict:
+    """Return futures long/short account ratio for all tracked coins.
+    {coin: {long_pct: float, short_pct: float, ratio: float}}
+    Contrarian: >70% long is crowded; <30% long is oversold.
+    """
+    if config.MODE == "fixture":
+        return _FIXTURE_LS.copy()
+
+    now = time.time()
+    if _ls_cache and now - _ls_cache.get("_ts", 0) < _LS_TTL:
+        return {k: v for k, v in _ls_cache.items() if k != "_ts"}
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    result = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = {pool.submit(_fetch_ls_one, coin, sym): coin
+                for coin, sym in _SYMBOLS.items()}
+        for f in as_completed(futs, timeout=15):
+            try:
+                coin, data = f.result()
+                result[coin] = data
+            except Exception:
+                pass
+
+    _ls_cache.clear()
+    _ls_cache.update(result)
+    _ls_cache["_ts"] = now
+    return result
+
+
+def get_tradfi() -> dict:
+    """Return TradFi macro indicators via yfinance: S&P500, VIX, DXY, Gold.
+    {sp500|vix|dxy|gold: {price: float, change_pct: float}}
+    Key relationships:
+      DXY rising  → crypto headwind (inverse correlation)
+      VIX >25     → risk-off, avoid new longs
+      S&P500 falling sharply → crypto likely follows
+    """
+    if config.MODE == "fixture":
+        return _FIXTURE_TRADFI.copy()
+
+    now = time.time()
+    if _tradfi_cache and now - _tradfi_cache.get("_ts", 0) < _TRADFI_TTL:
+        return {k: v for k, v in _tradfi_cache.items() if k != "_ts"}
+
+    try:
+        import yfinance as yf
+    except ImportError:
+        return _FIXTURE_TRADFI.copy()
+
+    result = {}
+    for name, ticker in _TRADFI_TICKERS.items():
+        try:
+            d = yf.download(ticker, period="5d", interval="1d",
+                            progress=False, auto_adjust=True)
+            col = d["Close"].dropna()
+            if len(col) >= 2:
+                curr = float(col.squeeze().iloc[-1])
+                prev = float(col.squeeze().iloc[-2])
+                chg  = round((curr - prev) / prev * 100, 2)
+                result[name] = {"price": round(curr, 2), "change_pct": chg}
+            elif len(col) == 1:
+                result[name] = {"price": round(float(col.squeeze().iloc[-1]), 2),
+                                "change_pct": 0.0}
+        except Exception:
+            result[name] = _FIXTURE_TRADFI.get(name, {"price": 0.0, "change_pct": 0.0})
+
+    _tradfi_cache.clear()
+    _tradfi_cache.update(result)
+    _tradfi_cache["_ts"] = now
+    return result
 
 
 def get_dominance() -> dict:

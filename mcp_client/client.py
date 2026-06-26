@@ -36,9 +36,12 @@ _FALLBACK = {
         a["coin"], a["side"], a["quantity"], a.get("client_order_id") or None),
     ("exchange", "update_meta"): lambda a: _ex.update_meta(
         a["coin"], a.get("peak_pnl"), a.get("add_target")),
-    ("macro", "get_fear_greed"):   lambda a: _macro.get_fear_greed(),
-    ("macro", "get_funding_rates"): lambda a: _macro.get_funding_rates(),
-    ("macro", "get_dominance"):    lambda a: _macro.get_dominance(),
+    ("macro", "get_fear_greed"):      lambda a: _macro.get_fear_greed(),
+    ("macro", "get_funding_rates"):   lambda a: _macro.get_funding_rates(),
+    ("macro", "get_dominance"):       lambda a: _macro.get_dominance(),
+    ("macro", "get_open_interest"):   lambda a: _macro.get_open_interest(),
+    ("macro", "get_long_short_ratio"): lambda a: _macro.get_long_short_ratio(),
+    ("macro", "get_tradfi"):          lambda a: _macro.get_tradfi(),
 }
 
 # Tools that must NEVER be auto-retried/fallback-executed on transport error,
@@ -197,6 +200,15 @@ class MCPClient:
 
     def dominance(self):
         return self.call("macro", "get_dominance") or {}
+
+    def open_interest(self):
+        return self.call("macro", "get_open_interest") or {}
+
+    def long_short_ratio(self):
+        return self.call("macro", "get_long_short_ratio") or {}
+
+    def tradfi(self):
+        return self.call("macro", "get_tradfi") or {}
 
     def status(self):
         return {"transport": "mcp" if self.transport_ok else "in-process",

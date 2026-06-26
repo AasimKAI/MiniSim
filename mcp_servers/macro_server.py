@@ -22,6 +22,21 @@ try:
         """Return BTC, ETH, and altcoin market-cap dominance from CoinGecko."""
         return core.get_dominance()
 
+    @mcp.tool()
+    def get_open_interest() -> dict:
+        """Return futures open interest (USD) and 1h change % for all tracked coins."""
+        return core.get_open_interest()
+
+    @mcp.tool()
+    def get_long_short_ratio() -> dict:
+        """Return futures long/short account ratio for all tracked coins."""
+        return core.get_long_short_ratio()
+
+    @mcp.tool()
+    def get_tradfi() -> dict:
+        """Return TradFi macro indicators: S&P500, VIX, DXY, Gold via yfinance."""
+        return core.get_tradfi()
+
     def main():
         mcp.run(transport="stdio")
 except ImportError:

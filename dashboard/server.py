@@ -197,17 +197,23 @@ def build_app():
         fng     = _macro.get_fear_greed()
         funding = _macro.get_funding_rates()
         dom     = _macro.get_dominance()
+        oi      = _macro.get_open_interest()
+        ls      = _macro.get_long_short_ratio()
+        tf      = _macro.get_tradfi()
         vals    = list(funding.values())
         avg_pct = round(sum(vals) / len(vals) * 100, 4) if vals else 0.0
         bias    = ("long_crowded" if avg_pct > 0.05
                    else "short_crowded" if avg_pct < -0.03
                    else "neutral")
         return JSONResponse({
-            "fear_greed":      fng,
-            "funding_rates":   funding,
-            "avg_funding_pct": avg_pct,
-            "funding_bias":    bias,
-            "dominance":       dom,
+            "fear_greed":        fng,
+            "funding_rates":     funding,
+            "avg_funding_pct":   avg_pct,
+            "funding_bias":      bias,
+            "dominance":         dom,
+            "open_interest":     oi,
+            "long_short_ratio":  ls,
+            "tradfi":            tf,
         })
 
     @app.get("/report", response_class=HTMLResponse)

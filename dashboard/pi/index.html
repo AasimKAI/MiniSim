@@ -888,6 +888,9 @@ async function load(){
        <span class="chip" id="fngChip" title="Fear &amp; Greed index">— F&amp;G</span>
        <span class="chip" id="fundChip" title="Avg perpetual funding rate">— fund</span>
        <span class="chip" id="domChip" title="BTC / Alt market-cap dominance">— dom</span>
+       <span class="chip" id="vixChip" title="VIX volatility index">VIX —</span>
+       <span class="chip" id="dxyChip" title="US Dollar index">DXY —</span>
+       <span class="chip" id="lsChip" title="BTC Long/Short ratio">L/S —</span>
        <span class="chip" style="color:var(--dim)">↻ ${esc(_updTime)}</span>`;
     /* overwrite strat chip text with active strategy names */
     const _activeStrats=(_stratCache&&_stratCache.state&&_stratCache.state.active_strategies)||[];
@@ -916,6 +919,23 @@ async function load(){
       const domCol=domSig==='alt_season'?'var(--up)':domSig==='btc_season'?'var(--warn)':'var(--dim)';
       const dc=document.getElementById('domChip');
       if(dc&&btcD>0){dc.innerHTML=`BTC <b style="color:${domCol}">${btcD.toFixed(1)}%</b>`;dc.title=`BTC dom ${btcD.toFixed(1)}% · Alt dom ${altD.toFixed(1)}% · ${domSig}`;}
+      /* VIX + DXY */
+      const tf=md.tradfi||{};
+      const vix=(tf.vix||{}).price??0,vixChg=(tf.vix||{}).change_pct??0;
+      const dxy=(tf.dxy||{}).price??0,dxyChg=(tf.dxy||{}).change_pct??0;
+      const vixCol=vix>30?'var(--dn)':vix>25?'var(--warn)':'var(--dim)';
+      const dxyCol=dxyChg>0.5?'var(--dn)':dxyChg<-0.5?'var(--up)':'var(--dim)';
+      const vc=document.getElementById('vixChip');
+      if(vc&&vix>0){vc.innerHTML=`VIX <b style="color:${vixCol}">${vix.toFixed(1)}</b>`;vc.title=`VIX ${vix.toFixed(1)} (${vixChg>=0?'+':''}${vixChg.toFixed(2)}%) — ${vix>30?'extreme fear':vix>25?'elevated':'calm'}`;}
+      const dxc=document.getElementById('dxyChip');
+      if(dxc&&dxy>0){dxc.innerHTML=`DXY <b style="color:${dxyCol}">${dxy.toFixed(1)}</b>`;dxc.title=`DXY ${dxy.toFixed(2)} (${dxyChg>=0?'+':''}${dxyChg.toFixed(2)}%) — ${dxyChg>0.5?'rising (crypto headwind)':dxyChg<-0.5?'falling (crypto tailwind)':'neutral'}`;}
+      /* BTC L/S */
+      const lsData=md.long_short_ratio||{};
+      const btcLS=lsData.BTC||{};
+      const btcLP=(btcLS.long_pct??0.5)*100;
+      const lsCol=btcLP>70?'var(--dn)':btcLP<35?'var(--up)':'var(--dim)';
+      const lsc=document.getElementById('lsChip');
+      if(lsc&&btcLP>0){lsc.innerHTML=`L/S <b style="color:${lsCol}">${btcLP.toFixed(0)}%L</b>`;lsc.title=`BTC Long/Short: ${btcLP.toFixed(1)}% long · ${(100-btcLP).toFixed(1)}% short`;}
     }catch(_){};
 
     /* trade log cache */

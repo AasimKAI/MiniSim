@@ -105,9 +105,22 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
             except Exception as e:
                 log.debug("Strategy %s signal error for %s: %s", strat.name, coin, e)
 
+    # Enrich context with per-coin OI and L/S so CEO sees coin-specific structure
+    coin_oi    = macro.get("open_interest", {}).get(coin, {})
+    coin_ls    = macro.get("long_short_ratio", {}).get(coin, {})
+    ctx        = macro.get("context_str", "")
+    oi_parts   = []
+    if coin_oi.get("oi_usd"):
+        oi_b = coin_oi["oi_usd"] / 1e9
+        oi_parts.append(f"{coin}_OI=${oi_b:.2f}B(1hΔ{coin_oi.get('oi_change_pct',0):+.1f}%)")
+    if coin_ls.get("long_pct"):
+        lp = coin_ls["long_pct"] * 100
+        oi_parts.append(f"{coin}_L/S={lp:.0f}%L/{100-lp:.0f}%S")
+    coin_ctx = (ctx + ", " + ", ".join(oi_parts)) if oi_parts else ctx
+
     decision = engine.decide(coin, verdicts, regime,
                               strategy_signals=strategy_signals or None,
-                              macro_context=macro.get("context_str", ""))
+                              macro_context=coin_ctx)
     return decision, price, verdicts, regime, candles
 
 
@@ -129,6 +142,10 @@ def run_cycle(mcp):
         fng      = mcp.fear_greed()
         funding  = mcp.funding_rates()
         dom      = mcp.dominance()
+        oi       = mcp.open_interest()
+        ls       = mcp.long_short_ratio()
+        tradfi   = mcp.tradfi()
+
         fng_val  = fng.get("value", 50)
         fng_lbl  = fng.get("label", "Neutral")
         vals     = list(funding.values())
@@ -138,13 +155,25 @@ def run_cycle(mcp):
                     else "neutral")
         btc_dom  = dom.get("btc_dominance", 0.0)
         alt_dom  = dom.get("alt_dominance", 0.0)
+        vix      = tradfi.get("vix", {}).get("price", 0.0)
+        dxy      = tradfi.get("dxy", {}).get("price", 0.0)
+        dxy_chg  = tradfi.get("dxy", {}).get("change_pct", 0.0)
+        btc_ls   = ls.get("BTC", {})
+
         macro = {
-            "fear_greed":    fng,
-            "funding_rates": funding,
-            "dominance":     dom,
-            "context_str":   (f"FearGreed={fng_val}({fng_lbl}), "
-                              f"avg_funding={avg_fund:+.4f}%/8h({bias}), "
-                              f"BTC_dom={btc_dom:.1f}%, alt_dom={alt_dom:.1f}%"),
+            "fear_greed":       fng,
+            "funding_rates":    funding,
+            "dominance":        dom,
+            "open_interest":    oi,
+            "long_short_ratio": ls,
+            "tradfi":           tradfi,
+            "context_str": (
+                f"FearGreed={fng_val}({fng_lbl}), "
+                f"avg_funding={avg_fund:+.4f}%/8h({bias}), "
+                f"BTC_dom={btc_dom:.1f}%, "
+                f"VIX={vix:.1f}, DXY={dxy:.2f}({dxy_chg:+.2f}%), "
+                f"BTC_L/S={btc_ls.get('long_pct',0.5)*100:.0f}%L"
+            ),
         }
         log.info("Macro: %s", macro["context_str"])
     except Exception as e:

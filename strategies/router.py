@@ -82,10 +82,13 @@ def _call_router(market_state: dict, perf: dict) -> dict:
 
     ms = market_state
 
-    # Macro context block (Fear & Greed + funding bias + dominance)
+    # Macro context block
     fng      = ms.get("fear_greed", {})
     funding  = ms.get("funding_rates", {})
     dom      = ms.get("dominance", {})
+    tradfi   = ms.get("tradfi", {})
+    ls       = ms.get("long_short_ratio", {})
+
     fng_val  = fng.get("value", 50)
     fng_lbl  = fng.get("label", "Neutral")
     vals     = list(funding.values())
@@ -93,8 +96,16 @@ def _call_router(market_state: dict, perf: dict) -> dict:
     btc_dom  = dom.get("btc_dominance", 0.0)
     alt_dom  = dom.get("alt_dominance", 0.0)
     mcap_chg = dom.get("mcap_change_24h_pct", 0.0)
+    vix      = tradfi.get("vix",   {}).get("price", 0.0)
+    vix_chg  = tradfi.get("vix",   {}).get("change_pct", 0.0)
+    dxy      = tradfi.get("dxy",   {}).get("price", 0.0)
+    dxy_chg  = tradfi.get("dxy",   {}).get("change_pct", 0.0)
+    sp500_chg = tradfi.get("sp500", {}).get("change_pct", 0.0)
+    btc_ls   = ls.get("BTC", {})
+    btc_lp   = btc_ls.get("long_pct", 0.5) * 100
 
     macro_lines = [f"  Fear & Greed: {fng_val} — {fng_lbl}"]
+
     if avg_fund is not None:
         bias = ("long_crowded" if avg_fund > 0.05
                 else "short_crowded" if avg_fund < -0.03
@@ -104,18 +115,40 @@ def _call_router(market_state: dict, perf: dict) -> dict:
             macro_lines.append("  ⚠ Funding very high — longs crowded, squeeze risk; prefer SHORT strategies")
         elif avg_fund < -0.05:
             macro_lines.append("  ⚠ Funding very negative — shorts crowded; prefer LONG strategies")
+
     if btc_dom > 0:
         dom_signal = ("btc_season" if btc_dom >= 58 else "alt_season" if btc_dom <= 48 else "neutral")
-        macro_lines.append(f"  BTC dominance: {btc_dom:.1f}%  |  Alt dominance: {alt_dom:.1f}%  "
-                           f"|  Market cap 24h: {mcap_chg:+.2f}%  ({dom_signal})")
+        macro_lines.append(f"  BTC dominance: {btc_dom:.1f}%  |  Alt: {alt_dom:.1f}%  "
+                           f"|  MCap 24h: {mcap_chg:+.2f}%  ({dom_signal})")
         if dom_signal == "btc_season":
-            macro_lines.append("  ⚠ BTC season — capital in BTC, alts underperform; prefer BTC or reduce alt longs")
+            macro_lines.append("  ⚠ BTC season — alts underperform; prefer BTC or reduce alt longs")
         elif dom_signal == "alt_season":
-            macro_lines.append("  ⚠ Alt season — dominance low, alts outperforming; LONG altcoins favoured")
+            macro_lines.append("  ⚠ Alt season — alts outperforming; LONG altcoins favoured")
+
+    if vix > 0:
+        macro_lines.append(f"  VIX: {vix:.1f} ({vix_chg:+.2f}%)  |  "
+                           f"DXY: {dxy:.2f} ({dxy_chg:+.2f}%)  |  S&P500: {sp500_chg:+.2f}%")
+        if vix > 30:
+            macro_lines.append("  ⚠ VIX >30 — extreme TradFi fear, risk-off; prefer SHORT or cash")
+        elif vix > 25:
+            macro_lines.append("  ⚠ VIX elevated — risk-off signal; reduce longs, lower risk_level")
+        if dxy_chg > 0.5:
+            macro_lines.append("  ⚠ DXY rising sharply — strong crypto headwind; prefer SHORT strategies")
+        elif dxy_chg < -0.5:
+            macro_lines.append("  ✓ DXY falling — crypto tailwind; LONG strategies favoured")
+
+    if btc_lp > 0:
+        macro_lines.append(f"  BTC L/S: {btc_lp:.0f}% long / {100-btc_lp:.0f}% short")
+        if btc_lp > 70:
+            macro_lines.append("  ⚠ BTC longs very crowded — squeeze risk high; contrarian SHORT signal")
+        elif btc_lp < 35:
+            macro_lines.append("  ⚠ BTC shorts very crowded — short squeeze risk; contrarian LONG signal")
+
     if fng_val <= 20:
         macro_lines.append("  ⚠ Extreme Fear — contrarian buy signal; favour LONG or bounce strategies")
     elif fng_val >= 80:
         macro_lines.append("  ⚠ Extreme Greed — contrarian sell signal; favour SHORT or scalp strategies")
+
     macro_block = "Macro context:\n" + "\n".join(macro_lines)
 
     per_coin_lines = "\n".join(
@@ -267,9 +300,11 @@ def refresh_if_stale(coin_candles: dict | None = None, force: bool = False) -> l
     try:
         from mcp_client.client import get_client as _get_mc
         _mc = _get_mc()
-        market_state["fear_greed"]    = _mc.fear_greed()
-        market_state["funding_rates"] = _mc.funding_rates()
-        market_state["dominance"]     = _mc.dominance()
+        market_state["fear_greed"]       = _mc.fear_greed()
+        market_state["funding_rates"]    = _mc.funding_rates()
+        market_state["dominance"]        = _mc.dominance()
+        market_state["long_short_ratio"] = _mc.long_short_ratio()
+        market_state["tradfi"]           = _mc.tradfi()
     except Exception as _me:
         log.debug("Router: macro fetch skipped (%s)", _me)
 
