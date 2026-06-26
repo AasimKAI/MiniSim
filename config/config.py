@@ -117,6 +117,11 @@ MCP_SERVERS = {
         "args": ["-m", "mcp_servers.exchange_server"],
         "enabled": True,
     },
+    "macro": {
+        "command": sys.executable,
+        "args": ["-m", "mcp_servers.macro_server"],
+        "enabled": True,
+    },
 }
 
 # ----------------------------------------------------------------------------

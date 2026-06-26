@@ -885,6 +885,8 @@ async function load(){
        <span class="chip">realized <b class="${pc}">${(perf.realized_usd||0)>=0?'+':''}$${fmt(perf.realized_usd)}</b></span>
        <span class="chip"><b>${s.coins_tracked||15}</b> coins</span>
        <span class="chip clickable" id="stratChip" onclick="openStratModal()" title="Click for strategy details">⚡ STRAT</span>
+       <span class="chip" id="fngChip" title="Fear &amp; Greed index">— F&amp;G</span>
+       <span class="chip" id="fundChip" title="Avg perpetual funding rate">— fund</span>
        <span class="chip" style="color:var(--dim)">↻ ${esc(_updTime)}</span>`;
     /* overwrite strat chip text with active strategy names */
     const _activeStrats=(_stratCache&&_stratCache.state&&_stratCache.state.active_strategies)||[];
@@ -892,6 +894,22 @@ async function load(){
       const _sc=document.getElementById('stratChip');
       if(_sc) _sc.innerHTML='⚡ '+esc(_activeStrats.slice(0,3).join(' · '));
     }
+    /* fetch macro data and update chips */
+    try{
+      const mr=await api('/api/macro');
+      const md=await mr.json();
+      const fng=md.fear_greed||{};
+      const fv=fng.value??50;
+      const fl=fng.label||'Neutral';
+      const fngCol=fv<=25?'var(--dn)':fv>=75?'var(--up)':'var(--warn)';
+      const fc=document.getElementById('fngChip');
+      if(fc){fc.innerHTML=`<b style="color:${fngCol}">${fv}</b> F&G`;fc.title=`Fear & Greed: ${fv} — ${fl}`;}
+      const af=md.avg_funding_pct??0;
+      const fundCol=af>0.05?'var(--dn)':af<-0.03?'var(--up)':'var(--dim)';
+      const fundSign=af>=0?'+':'';
+      const fc2=document.getElementById('fundChip');
+      if(fc2){fc2.innerHTML=`<b style="color:${fundCol}">${fundSign}${af.toFixed(4)}%</b> fund`;fc2.title=`Avg funding ${md.funding_bias||'neutral'}`;}
+    }catch(_){};
 
     /* trade log cache */
     _tradeCache=perf.recent||[];

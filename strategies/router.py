@@ -81,6 +81,30 @@ def _call_router(market_state: dict, perf: dict) -> dict:
     )
 
     ms = market_state
+
+    # Macro context block (Fear & Greed + funding bias)
+    fng      = ms.get("fear_greed", {})
+    funding  = ms.get("funding_rates", {})
+    fng_val  = fng.get("value", 50)
+    fng_lbl  = fng.get("label", "Neutral")
+    vals     = list(funding.values())
+    avg_fund = round(sum(vals) / len(vals) * 100, 4) if vals else None
+    macro_lines = [f"  Fear & Greed: {fng_val} — {fng_lbl}"]
+    if avg_fund is not None:
+        bias = ("long_crowded" if avg_fund > 0.05
+                else "short_crowded" if avg_fund < -0.03
+                else "neutral")
+        macro_lines.append(f"  Avg Funding:  {avg_fund:+.4f}%/8h ({bias})")
+        if avg_fund > 0.10:
+            macro_lines.append("  ⚠ Funding very high — longs crowded, squeeze risk; prefer SHORT strategies")
+        elif avg_fund < -0.05:
+            macro_lines.append("  ⚠ Funding very negative — shorts crowded; prefer LONG strategies")
+    if fng_val <= 20:
+        macro_lines.append("  ⚠ Extreme Fear — contrarian buy signal; favour LONG or bounce strategies")
+    elif fng_val >= 80:
+        macro_lines.append("  ⚠ Extreme Greed — contrarian sell signal; favour SHORT or scalp strategies")
+    macro_block = "Macro context:\n" + "\n".join(macro_lines)
+
     per_coin_lines = "\n".join(
         f"  {coin}: {d['direction']} | regime-proxy ADX={d.get('adx','?')} | "
         f"7d={d.get('ret_7d',0):+.1f}%"
@@ -118,6 +142,8 @@ def _call_router(market_state: dict, perf: dict) -> dict:
   Regime:     {ms['regime']}
   BTC 7d:     {ms['btc_7d']:+.1f}%  |  BTC 24h: {ms['btc_24h']:+.1f}%
   Market avg 7d: {ms['avg_7d']:+.1f}%  |  BTC direction: {ms['btc_direction']}
+
+{macro_block}
 
 Per-coin direction:
 {per_coin_lines}
@@ -223,6 +249,15 @@ def refresh_if_stale(coin_candles: dict | None = None, force: bool = False) -> l
             "avg_7d": 0, "avg_24h": 0, "btc_7d": 0, "btc_24h": 0,
             "btc_direction": "neutral", "per_coin": {},
         })
+
+    # Attach latest macro data to market_state for the LLM prompt
+    try:
+        from mcp_client.client import get_client as _get_mc
+        _mc = _get_mc()
+        market_state["fear_greed"]    = _mc.fear_greed()
+        market_state["funding_rates"] = _mc.funding_rates()
+    except Exception as _me:
+        log.debug("Router: macro fetch skipped (%s)", _me)
 
     perf   = _strategy_performance()
     result = _call_router(market_state, perf)

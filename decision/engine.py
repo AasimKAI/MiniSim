@@ -79,13 +79,14 @@ def _strategy_params_block(strategy_signals: list | None) -> str:
             + "\n".join(lines)) if lines else ""
 
 
-def research(coin, verdicts, regime, strategy_signals=None):
+def research(coin, verdicts, regime, strategy_signals=None, macro_context=""):
     """LLM CEO decision — returns JSON with verdict, confidence, and chosen strategy."""
     facts = "; ".join(f"{v['analyst']}={v['verdict']}({v['confidence']:.2f})" for v in verdicts)
     perf  = build_context(coin=coin)
     perf_block    = f"\n\n{perf}" if perf else ""
     strat_ctx     = _strategy_context(strategy_signals)
     strat_params  = _strategy_params_block(strategy_signals) if strategy_signals else ""
+    macro_block   = f"\nMacro: {macro_context}" if macro_context else ""
 
     has_strategies = bool(strategy_signals)
     strategy_instr = (
@@ -103,13 +104,16 @@ def research(coin, verdicts, regime, strategy_signals=None):
         "3. If strategy signals fire, prefer strategies whose 'best_for' matches "
         "the current regime and direction.\n"
         "4. A strategy with recent losses should get lower weight.\n"
-        "5. Agree with analyst arithmetic unless there is a clear reason not to."
+        "5. Agree with analyst arithmetic unless there is a clear reason not to.\n"
+        "6. Use macro context (Fear & Greed, funding bias) as a tie-breaker: "
+        "extreme fear favours longs; extreme greed + long_crowded funding favours shorts."
     )
 
     user = (
         f"Coin: {coin}\n"
         f"Regime: {regime}\n"
         f"Analysts: {facts}"
+        f"{macro_block}"
         f"{strat_ctx}"
         f"{strat_params}"
         f"{perf_block}\n"
@@ -119,7 +123,7 @@ def research(coin, verdicts, regime, strategy_signals=None):
     return chat_json(sysmsg, user)
 
 
-def decide(coin, verdicts, regime, strategy_signals=None):
+def decide(coin, verdicts, regime, strategy_signals=None, macro_context=""):
     """
     Full decision pipeline.
 
@@ -136,7 +140,8 @@ def decide(coin, verdicts, regime, strategy_signals=None):
     direction = "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
     arith_conf = min(1.0, abs(score))
 
-    ceo = research(coin, verdicts, regime, strategy_signals=strategy_signals)
+    ceo = research(coin, verdicts, regime, strategy_signals=strategy_signals,
+                   macro_context=macro_context)
 
     ceo_dir = ceo.get("verdict", "neutral")
     if ceo_dir not in ("bullish", "bearish", "neutral"):

@@ -23,6 +23,7 @@ log = get_logger("mcp-client")
 from mcp_servers import _marketdata_core as _md
 from mcp_servers import _news_core as _news
 from mcp_servers import _exchange_core as _ex
+from mcp_servers import _macro_core as _macro
 
 _FALLBACK = {
     ("market_data", "get_candles"): lambda a: _md.get_candles(a["coin"], a.get("count", 200)),
@@ -35,6 +36,8 @@ _FALLBACK = {
         a["coin"], a["side"], a["quantity"], a.get("client_order_id") or None),
     ("exchange", "update_meta"): lambda a: _ex.update_meta(
         a["coin"], a.get("peak_pnl"), a.get("add_target")),
+    ("macro", "get_fear_greed"):   lambda a: _macro.get_fear_greed(),
+    ("macro", "get_funding_rates"): lambda a: _macro.get_funding_rates(),
 }
 
 # Tools that must NEVER be auto-retried/fallback-executed on transport error,
@@ -184,6 +187,12 @@ class MCPClient:
     def update_meta(self, coin, peak_pnl=None, add_target=None):
         return self.call("exchange", "update_meta", coin=coin,
                          peak_pnl=peak_pnl, add_target=add_target)
+
+    def fear_greed(self):
+        return self.call("macro", "get_fear_greed") or {}
+
+    def funding_rates(self):
+        return self.call("macro", "get_funding_rates") or {}
 
     def status(self):
         return {"transport": "mcp" if self.transport_ok else "in-process",

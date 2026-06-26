@@ -511,6 +511,23 @@ async function load(){
         ? 'Active: '+active.join(', ')+'  ·  risk ×'+risk
         : '';
     }catch(_){}
+    /* macro: Fear & Greed + funding */
+    try{
+      const mr=await api('/api/macro');
+      const md=await mr.json();
+      const fng=md.fear_greed||{};
+      const fv=fng.value??50,fl=fng.label||'Neutral';
+      const af=md.avg_funding_pct??0;
+      const fngCol=fv<=25?'var(--dn)':fv>=75?'var(--up)':'var(--warn)';
+      const fundCol=af>0.05?'var(--dn)':af<-0.03?'var(--up)':'var(--dim)';
+      const sl2=document.getElementById('stratline');
+      if(sl2){
+        const existing=sl2.textContent.trim();
+        const macroStr=`F&G <span style="color:${fngCol};font-weight:700">${fv} ${fl}</span>`
+          +` · fund <span style="color:${fundCol};font-weight:700">${af>=0?'+':''}${af.toFixed(4)}%</span>`;
+        sl2.innerHTML=(existing?existing+'  ·  ':'')+macroStr;
+      }
+    }catch(_){}
 
     const pulse=document.getElementById('pulse');
     pulse.classList.add('on');setTimeout(()=>pulse.classList.remove('on'),700);

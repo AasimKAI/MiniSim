@@ -61,12 +61,13 @@ def _strat_meta(strategy_name: str) -> dict:
     }
 
 
-def analyse_coin(mcp, coin, active_strategies=None):
+def analyse_coin(mcp, coin, active_strategies=None, macro=None):
     """
     Run the full analysis pipeline for one coin.
 
     Returns (decision, price, verdicts, regime, candles).
     Candles are returned so run_cycle can accumulate them for the router.
+    macro: optional dict with keys 'fear_greed' and 'funding_rates'.
     """
     candles = mcp.candles(coin, 300)   # 300 × 15 min = 75 h, enough for EMA200 + all indicators
     ticker  = mcp.ticker(coin)
@@ -80,7 +81,13 @@ def analyse_coin(mcp, coin, active_strategies=None):
         on_chain_analyst(coin, ticker),
         sentiment_analyst(coin, mcp),
     ]
-    regime = regime_detector.detect(candles)["regime"]
+    macro = macro or {}
+    regime_data = regime_detector.detect(
+        candles,
+        fear_greed=macro.get("fear_greed"),
+        funding_rates=macro.get("funding_rates"),
+    )
+    regime = regime_data["regime"]
 
     # ── Strategy signals ───────────────────────────────────────────────────────
     strategy_signals = []
@@ -98,7 +105,8 @@ def analyse_coin(mcp, coin, active_strategies=None):
                 log.debug("Strategy %s signal error for %s: %s", strat.name, coin, e)
 
     decision = engine.decide(coin, verdicts, regime,
-                              strategy_signals=strategy_signals or None)
+                              strategy_signals=strategy_signals or None,
+                              macro_context=macro.get("context_str", ""))
     return decision, price, verdicts, regime, candles
 
 
@@ -114,13 +122,35 @@ def run_cycle(mcp):
     else:
         log.info("No active strategies (router not yet initialised — using analyst-only mode)")
 
+    # Macro data fetched once per cycle; both sources are cached internally
+    macro: dict = {}
+    try:
+        fng      = mcp.fear_greed()
+        funding  = mcp.funding_rates()
+        fng_val  = fng.get("value", 50)
+        fng_lbl  = fng.get("label", "Neutral")
+        vals     = list(funding.values())
+        avg_fund = round(sum(vals) / len(vals) * 100, 4) if vals else 0.0
+        bias     = ("long_crowded" if avg_fund > 0.05
+                    else "short_crowded" if avg_fund < -0.03
+                    else "neutral")
+        macro = {
+            "fear_greed":    fng,
+            "funding_rates": funding,
+            "context_str":   (f"FearGreed={fng_val}({fng_lbl}), "
+                              f"avg_funding={avg_fund:+.4f}%/8h({bias})"),
+        }
+        log.info("Macro: %s", macro["context_str"])
+    except Exception as e:
+        log.debug("Macro fetch skipped: %s", e)
+
     regime_seen  = "—"
     cycle_candles = {}
 
     for coin in config.TRACKED_COINS:
         try:
             decision, price, verdicts, regime, candles = analyse_coin(
-                mcp, coin, active_strategies)
+                mcp, coin, active_strategies, macro=macro)
             cycle_candles[coin] = candles
             regime_seen = regime
 

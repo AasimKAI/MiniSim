@@ -190,6 +190,24 @@ def build_app():
             catalogue = {}
         return JSONResponse({"state": state, "catalogue": catalogue})
 
+    @app.get("/api/macro")
+    def macro_data(request: Request):
+        _require_read(request)
+        from mcp_servers import _macro_core as _macro
+        fng     = _macro.get_fear_greed()
+        funding = _macro.get_funding_rates()
+        vals    = list(funding.values())
+        avg_pct = round(sum(vals) / len(vals) * 100, 4) if vals else 0.0
+        bias    = ("long_crowded" if avg_pct > 0.05
+                   else "short_crowded" if avg_pct < -0.03
+                   else "neutral")
+        return JSONResponse({
+            "fear_greed":      fng,
+            "funding_rates":   funding,
+            "avg_funding_pct": avg_pct,
+            "funding_bias":    bias,
+        })
+
     @app.get("/report", response_class=HTMLResponse)
     def report():
         return _page("report")
