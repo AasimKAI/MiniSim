@@ -216,6 +216,10 @@ def build_app():
             "tradfi":            tf,
         })
 
+    @app.get("/macro", response_class=HTMLResponse)
+    def macro_page():
+        return _page("macro")
+
     @app.get("/report", response_class=HTMLResponse)
     def report():
         return _page("report")
