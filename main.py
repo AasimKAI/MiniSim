@@ -86,6 +86,7 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
         candles,
         fear_greed=macro.get("fear_greed"),
         funding_rates=macro.get("funding_rates"),
+        dominance=macro.get("dominance"),
     )
     regime = regime_data["regime"]
 
@@ -122,11 +123,12 @@ def run_cycle(mcp):
     else:
         log.info("No active strategies (router not yet initialised — using analyst-only mode)")
 
-    # Macro data fetched once per cycle; both sources are cached internally
+    # Macro data fetched once per cycle; all sources are cached internally
     macro: dict = {}
     try:
         fng      = mcp.fear_greed()
         funding  = mcp.funding_rates()
+        dom      = mcp.dominance()
         fng_val  = fng.get("value", 50)
         fng_lbl  = fng.get("label", "Neutral")
         vals     = list(funding.values())
@@ -134,11 +136,15 @@ def run_cycle(mcp):
         bias     = ("long_crowded" if avg_fund > 0.05
                     else "short_crowded" if avg_fund < -0.03
                     else "neutral")
+        btc_dom  = dom.get("btc_dominance", 0.0)
+        alt_dom  = dom.get("alt_dominance", 0.0)
         macro = {
             "fear_greed":    fng,
             "funding_rates": funding,
+            "dominance":     dom,
             "context_str":   (f"FearGreed={fng_val}({fng_lbl}), "
-                              f"avg_funding={avg_fund:+.4f}%/8h({bias})"),
+                              f"avg_funding={avg_fund:+.4f}%/8h({bias}), "
+                              f"BTC_dom={btc_dom:.1f}%, alt_dom={alt_dom:.1f}%"),
         }
         log.info("Macro: %s", macro["context_str"])
     except Exception as e:

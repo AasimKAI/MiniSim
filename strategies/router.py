@@ -82,13 +82,18 @@ def _call_router(market_state: dict, perf: dict) -> dict:
 
     ms = market_state
 
-    # Macro context block (Fear & Greed + funding bias)
+    # Macro context block (Fear & Greed + funding bias + dominance)
     fng      = ms.get("fear_greed", {})
     funding  = ms.get("funding_rates", {})
+    dom      = ms.get("dominance", {})
     fng_val  = fng.get("value", 50)
     fng_lbl  = fng.get("label", "Neutral")
     vals     = list(funding.values())
     avg_fund = round(sum(vals) / len(vals) * 100, 4) if vals else None
+    btc_dom  = dom.get("btc_dominance", 0.0)
+    alt_dom  = dom.get("alt_dominance", 0.0)
+    mcap_chg = dom.get("mcap_change_24h_pct", 0.0)
+
     macro_lines = [f"  Fear & Greed: {fng_val} — {fng_lbl}"]
     if avg_fund is not None:
         bias = ("long_crowded" if avg_fund > 0.05
@@ -99,6 +104,14 @@ def _call_router(market_state: dict, perf: dict) -> dict:
             macro_lines.append("  ⚠ Funding very high — longs crowded, squeeze risk; prefer SHORT strategies")
         elif avg_fund < -0.05:
             macro_lines.append("  ⚠ Funding very negative — shorts crowded; prefer LONG strategies")
+    if btc_dom > 0:
+        dom_signal = ("btc_season" if btc_dom >= 58 else "alt_season" if btc_dom <= 48 else "neutral")
+        macro_lines.append(f"  BTC dominance: {btc_dom:.1f}%  |  Alt dominance: {alt_dom:.1f}%  "
+                           f"|  Market cap 24h: {mcap_chg:+.2f}%  ({dom_signal})")
+        if dom_signal == "btc_season":
+            macro_lines.append("  ⚠ BTC season — capital in BTC, alts underperform; prefer BTC or reduce alt longs")
+        elif dom_signal == "alt_season":
+            macro_lines.append("  ⚠ Alt season — dominance low, alts outperforming; LONG altcoins favoured")
     if fng_val <= 20:
         macro_lines.append("  ⚠ Extreme Fear — contrarian buy signal; favour LONG or bounce strategies")
     elif fng_val >= 80:
@@ -256,6 +269,7 @@ def refresh_if_stale(coin_candles: dict | None = None, force: bool = False) -> l
         _mc = _get_mc()
         market_state["fear_greed"]    = _mc.fear_greed()
         market_state["funding_rates"] = _mc.funding_rates()
+        market_state["dominance"]     = _mc.dominance()
     except Exception as _me:
         log.debug("Router: macro fetch skipped (%s)", _me)
 

@@ -38,6 +38,7 @@ _FALLBACK = {
         a["coin"], a.get("peak_pnl"), a.get("add_target")),
     ("macro", "get_fear_greed"):   lambda a: _macro.get_fear_greed(),
     ("macro", "get_funding_rates"): lambda a: _macro.get_funding_rates(),
+    ("macro", "get_dominance"):    lambda a: _macro.get_dominance(),
 }
 
 # Tools that must NEVER be auto-retried/fallback-executed on transport error,
@@ -193,6 +194,9 @@ class MCPClient:
 
     def funding_rates(self):
         return self.call("macro", "get_funding_rates") or {}
+
+    def dominance(self):
+        return self.call("macro", "get_dominance") or {}
 
     def status(self):
         return {"transport": "mcp" if self.transport_ok else "in-process",

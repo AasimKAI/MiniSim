@@ -196,6 +196,7 @@ def build_app():
         from mcp_servers import _macro_core as _macro
         fng     = _macro.get_fear_greed()
         funding = _macro.get_funding_rates()
+        dom     = _macro.get_dominance()
         vals    = list(funding.values())
         avg_pct = round(sum(vals) / len(vals) * 100, 4) if vals else 0.0
         bias    = ("long_crowded" if avg_pct > 0.05
@@ -206,6 +207,7 @@ def build_app():
             "funding_rates":   funding,
             "avg_funding_pct": avg_pct,
             "funding_bias":    bias,
+            "dominance":       dom,
         })
 
     @app.get("/report", response_class=HTMLResponse)

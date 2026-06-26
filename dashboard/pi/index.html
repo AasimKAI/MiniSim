@@ -887,6 +887,7 @@ async function load(){
        <span class="chip clickable" id="stratChip" onclick="openStratModal()" title="Click for strategy details">⚡ STRAT</span>
        <span class="chip" id="fngChip" title="Fear &amp; Greed index">— F&amp;G</span>
        <span class="chip" id="fundChip" title="Avg perpetual funding rate">— fund</span>
+       <span class="chip" id="domChip" title="BTC / Alt market-cap dominance">— dom</span>
        <span class="chip" style="color:var(--dim)">↻ ${esc(_updTime)}</span>`;
     /* overwrite strat chip text with active strategy names */
     const _activeStrats=(_stratCache&&_stratCache.state&&_stratCache.state.active_strategies)||[];
@@ -909,6 +910,12 @@ async function load(){
       const fundSign=af>=0?'+':'';
       const fc2=document.getElementById('fundChip');
       if(fc2){fc2.innerHTML=`<b style="color:${fundCol}">${fundSign}${af.toFixed(4)}%</b> fund`;fc2.title=`Avg funding ${md.funding_bias||'neutral'}`;}
+      const dom=md.dominance||{};
+      const btcD=dom.btc_dominance??0,altD=dom.alt_dominance??0;
+      const domSig=btcD>=58?'btc_season':btcD<=48&&btcD>0?'alt_season':'neutral';
+      const domCol=domSig==='alt_season'?'var(--up)':domSig==='btc_season'?'var(--warn)':'var(--dim)';
+      const dc=document.getElementById('domChip');
+      if(dc&&btcD>0){dc.innerHTML=`BTC <b style="color:${domCol}">${btcD.toFixed(1)}%</b>`;dc.title=`BTC dom ${btcD.toFixed(1)}% · Alt dom ${altD.toFixed(1)}% · ${domSig}`;}
     }catch(_){};
 
     /* trade log cache */

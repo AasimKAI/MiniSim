@@ -17,6 +17,11 @@ try:
         """Return latest perpetual funding rates for all tracked coins."""
         return core.get_funding_rates()
 
+    @mcp.tool()
+    def get_dominance() -> dict:
+        """Return BTC, ETH, and altcoin market-cap dominance from CoinGecko."""
+        return core.get_dominance()
+
     def main():
         mcp.run(transport="stdio")
 except ImportError:

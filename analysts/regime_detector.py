@@ -6,7 +6,7 @@ the output dict. The base regime string is unchanged — macro data is additive.
 from analysts import indicators as ind
 
 
-def detect(candles, fear_greed=None, funding_rates=None):
+def detect(candles, fear_greed=None, funding_rates=None, dominance=None):
     """Detect market regime from candles + optional macro context.
 
     Returns dict with at minimum:
@@ -15,10 +15,13 @@ def detect(candles, fear_greed=None, funding_rates=None):
       atr_pct  : float
 
     With macro args also returns:
-      fear_greed       : int (0-100)
-      fear_greed_label : str
-      avg_funding_pct  : float  (percent per 8h, e.g. 0.0100 = 0.01%)
-      funding_bias     : "long_crowded" | "short_crowded" | "neutral"
+      fear_greed        : int (0-100)
+      fear_greed_label  : str
+      avg_funding_pct   : float  (percent per 8h, e.g. 0.0100 = 0.01%)
+      funding_bias      : "long_crowded" | "short_crowded" | "neutral"
+      btc_dominance     : float  (% of total market cap)
+      alt_dominance     : float
+      dominance_signal  : "alt_season" | "btc_season" | "neutral"
     """
     h = [c["high"]  for c in candles]
     l = [c["low"]   for c in candles]
@@ -59,5 +62,20 @@ def detect(candles, fear_greed=None, funding_rates=None):
     else:
         result["avg_funding_pct"] = 0.0
         result["funding_bias"]    = "neutral"
+
+    # ── Dominance overlay ─────────────────────────────────────────────────────
+    dom = dominance or {}
+    btc_dom = dom.get("btc_dominance", 0.0)
+    alt_dom = dom.get("alt_dominance", 0.0)
+    result["btc_dominance"] = btc_dom
+    result["alt_dominance"] = alt_dom
+    # BTC dom > 58% = capital hiding in BTC = risk-off for alts
+    # BTC dom < 48% = alt season = alts outperforming
+    if btc_dom >= 58.0:
+        result["dominance_signal"] = "btc_season"
+    elif btc_dom <= 48.0 and btc_dom > 0:
+        result["dominance_signal"] = "alt_season"
+    else:
+        result["dominance_signal"] = "neutral"
 
     return result

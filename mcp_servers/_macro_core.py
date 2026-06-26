@@ -1,13 +1,19 @@
-"""Macro data feeds: Fear & Greed index + perpetual funding rates.
+"""Macro data feeds: Fear & Greed index, perpetual funding rates, dominance.
 
-Both are free public APIs, no key required, cached aggressively:
+All are free public APIs, no key required, cached aggressively:
   Fear & Greed  — alternative.me, updates once daily,  cached 1 h
   Funding rates — Binance fapi (Bybit fallback),        cached 15 min
+  Dominance     — CoinGecko /global,                    cached 30 min
 
 Funding rate sign convention (matches Binance):
   positive → longs pay shorts (market is long-biased)
   negative → shorts pay longs (market is short-biased)
   expressed as a decimal (0.0001 = 0.01% per 8 h)
+
+Dominance interpretation:
+  btc_dominance rising  → capital rotating into BTC (risk-off for alts)
+  btc_dominance falling → altcoin season, capital spreading out
+  alt_dominance         = 100 - btc_dom - eth_dom (everything else)
 """
 import time
 import httpx
@@ -16,12 +22,15 @@ from config import config
 _FNG_URL      = "https://api.alternative.me/fng/?limit=2"
 _BINANCE_FUND = "https://fapi.binance.com/fapi/v1/premiumIndex"
 _BYBIT_FUND   = "https://api.bybit.com/v5/market/tickers?category=linear"
+_COINGECKO_GLOBAL = "https://api.coingecko.com/api/v3/global"
 
-_FNG_TTL     = 3600   # once-daily feed — 1 h cache is fine
-_FUNDING_TTL =  900   # 8 h cycle — 15 min resolution is plenty
+_FNG_TTL       = 3600   # once-daily feed — 1 h cache is fine
+_FUNDING_TTL   =  900   # 8 h cycle — 15 min resolution is plenty
+_DOMINANCE_TTL = 1800   # updates every few minutes but 30 min is plenty
 
-_fng_cache:     dict = {}
-_funding_cache: dict = {}
+_fng_cache:       dict = {}
+_funding_cache:   dict = {}
+_dominance_cache: dict = {}
 
 _SYMBOLS = {
     "BTC": "BTCUSDT", "ETH": "ETHUSDT", "XRP": "XRPUSDT",
@@ -31,8 +40,12 @@ _SYMBOLS = {
     "UNI": "UNIUSDT",  "ARB": "ARBUSDT", "ATOM": "ATOMUSDT",
 }
 
-_FIXTURE_FNG     = {"value": 50, "label": "Neutral", "previous": 50, "source": "fixture"}
-_FIXTURE_FUNDING = {coin: 0.0 for coin in _SYMBOLS}
+_FIXTURE_FNG       = {"value": 50, "label": "Neutral", "previous": 50, "source": "fixture"}
+_FIXTURE_FUNDING   = {coin: 0.0 for coin in _SYMBOLS}
+_FIXTURE_DOMINANCE = {
+    "btc_dominance": 50.0, "eth_dominance": 15.0, "alt_dominance": 35.0,
+    "total_mcap_usd": 0.0, "mcap_change_24h_pct": 0.0, "source": "fixture",
+}
 
 
 def get_fear_greed() -> dict:
@@ -115,3 +128,46 @@ def _fetch_bybit_funding() -> dict:
         return rates
     except Exception:
         return _FIXTURE_FUNDING.copy()
+
+
+def get_dominance() -> dict:
+    """Return BTC, ETH, and altcoin market-cap dominance from CoinGecko /global.
+
+    Keys:
+      btc_dominance     : float  — % of total market cap held by BTC
+      eth_dominance     : float  — % held by ETH
+      alt_dominance     : float  — everything else (100 - btc - eth)
+      total_mcap_usd    : float  — total crypto market cap in USD
+      mcap_change_24h_pct: float — 24h market cap change %
+      source            : str
+    """
+    if config.MODE == "fixture":
+        return _FIXTURE_DOMINANCE.copy()
+
+    now = time.time()
+    if _dominance_cache and now - _dominance_cache.get("_ts", 0) < _DOMINANCE_TTL:
+        return {k: v for k, v in _dominance_cache.items() if k != "_ts"}
+
+    try:
+        r = httpx.get(_COINGECKO_GLOBAL, timeout=8.0,
+                      headers={"User-Agent": "MiniSim/5 macro-feed"})
+        r.raise_for_status()
+        data = r.json().get("data", {})
+        pct  = data.get("market_cap_percentage", {})
+        btc  = round(float(pct.get("btc", 0.0)), 2)
+        eth  = round(float(pct.get("eth", 0.0)), 2)
+        alt  = round(max(0.0, 100.0 - btc - eth), 2)
+        result = {
+            "btc_dominance":      btc,
+            "eth_dominance":      eth,
+            "alt_dominance":      alt,
+            "total_mcap_usd":     float(data.get("total_market_cap", {}).get("usd", 0.0)),
+            "mcap_change_24h_pct": round(float(data.get("market_cap_change_percentage_24h_usd", 0.0)), 2),
+            "source":             "coingecko",
+        }
+        _dominance_cache.clear()
+        _dominance_cache.update(result)
+        _dominance_cache["_ts"] = now
+        return result
+    except Exception:
+        return _FIXTURE_DOMINANCE.copy()
