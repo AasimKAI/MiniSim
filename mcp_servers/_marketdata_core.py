@@ -13,9 +13,25 @@ indicators (OBV/VWAP) are best-effort; price-based indicators are real.
 import time, math, hashlib
 from config import config
 
-_PRICE_ANCHOR = {"BTC": 65000, "ETH": 3400, "XRP": 0.55, "ADA": 0.45, "SOL": 150}
-_COINGECKO_IDS = {"BTC": "bitcoin", "ETH": "ethereum", "XRP": "ripple",
-                  "ADA": "cardano", "SOL": "solana"}
+_PRICE_ANCHOR = {
+    "BTC": 65000, "ETH": 3400, "XRP": 0.55,  "ADA": 0.45,  "SOL": 150,
+    "BNB": 600,   "DOGE": 0.15, "AVAX": 35,  "DOT": 7,     "LINK": 14,
+    "LTC": 85,    "NEAR": 6,    "UNI": 8,    "ARB": 1.0,   "ATOM": 8,
+}
+_COINGECKO_IDS = {
+    "BTC": "bitcoin",       "ETH": "ethereum",      "XRP": "ripple",
+    "ADA": "cardano",       "SOL": "solana",         "BNB": "binancecoin",
+    "DOGE": "dogecoin",     "AVAX": "avalanche-2",  "DOT": "polkadot",
+    "LINK": "chainlink",    "LTC": "litecoin",       "NEAR": "near",
+    "UNI": "uniswap",       "ARB": "arbitrum",       "ATOM": "cosmos",
+}
+_BINANCE_SYMBOLS = {
+    "BTC": "BTCUSDT",  "ETH": "ETHUSDT",  "XRP": "XRPUSDT",
+    "ADA": "ADAUSDT",  "SOL": "SOLUSDT",  "BNB": "BNBUSDT",
+    "DOGE": "DOGEUSDT","AVAX": "AVAXUSDT","DOT": "DOTUSDT",
+    "LINK": "LINKUSDT","LTC": "LTCUSDT",  "NEAR": "NEARUSDT",
+    "UNI": "UNIUSDT",  "ARB": "ARBUSDT",  "ATOM": "ATOMUSDT",
+}
 
 # cache: coin -> {"ts": float, "candles": [...], "source": str}
 _CACHE = {}
@@ -50,10 +66,40 @@ def synth_candles(coin, count=200, tf_minutes=5):
     return candles
 
 
-def _real_candles(coin):
-    """Fetch real prices via CoinGecko market_chart (days=1 -> ~5-min points).
-    Builds honest 'line candles' (open=prev close, high/low=range between points).
+def _real_candles_binance(coin, count=300):
+    """Fetch real OHLCV candles from Binance public API (no key needed).
+    Timeframe is controlled by config.CANDLE_INTERVAL (default 15m).
     Returns (candles, source) or (None, None) on any failure."""
+    symbol = _BINANCE_SYMBOLS.get(coin)
+    if not symbol:
+        return None, None
+    try:
+        import httpx
+        r = httpx.get(
+            "https://api.binance.com/api/v3/klines",
+            params={"symbol": symbol, "interval": config.CANDLE_INTERVAL, "limit": count},
+            timeout=10)
+        r.raise_for_status()
+        raw = r.json()
+        if not raw or len(raw) < 10:
+            return None, None
+        candles = []
+        for k in raw:
+            candles.append({
+                "t": int(k[0]) // 1000,
+                "open": float(k[1]),
+                "high": float(k[2]),
+                "low": float(k[3]),
+                "close": float(k[4]),
+                "volume": float(k[5]),
+            })
+        return candles, "binance"
+    except Exception:
+        return None, None
+
+
+def _real_candles_coingecko(coin):
+    """Fetch real prices via CoinGecko market_chart. Used as fallback."""
     cid = _COINGECKO_IDS.get(coin)
     if not cid:
         return None, None
@@ -76,12 +122,19 @@ def _real_candles(coin):
                 "t": int(t1 // 1000),
                 "open": p0, "close": p1,
                 "high": max(p0, p1), "low": min(p0, p1),
-                # approximate per-candle volume from the 24h rolling figure
                 "volume": round(vols.get(int(t1), 0.0) / max(len(prices), 1), 4),
             })
         return candles, "coingecko"
     except Exception:
         return None, None
+
+
+def _real_candles(coin, count=300):
+    """Try Binance first (no rate-limit issues), fall back to CoinGecko."""
+    candles, source = _real_candles_binance(coin, count)
+    if candles and len(candles) >= 10:
+        return candles, source
+    return _real_candles_coingecko(coin)
 
 
 def get_candles(coin, count=200):
@@ -95,7 +148,7 @@ def get_candles(coin, count=200):
 
     candles, source = (None, None)
     if config.MODE in ("paper", "testnet", "live"):
-        candles, source = _real_candles(coin)
+        candles, source = _real_candles(coin, max(count, 300))
     if not candles or len(candles) < count:
         # ensure synthetic series is at least as long as requested
         candles = synth_candles(coin, max(count, 300))

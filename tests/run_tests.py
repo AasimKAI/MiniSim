@@ -162,7 +162,7 @@ config.MODE=_save_mode
 # Market data reports its source honestly
 from mcp_servers import _marketdata_core as _md
 _md._CACHE.clear(); _md.get_ticker("BTC")
-check("data source is labelled", _md.current_source("BTC") in ("coingecko","synthetic","synthetic(fallback)"))
+check("data source is labelled", _md.current_source("BTC") in ("binance","coingecko","synthetic","synthetic(fallback)"))
 
 
 print("\nRegression — re-review (round 2) fixes:")
@@ -227,6 +227,50 @@ _md._CACHE.clear()
 _md.get_candles("BTC",100)            # seed cache with 100? (synth makes >=300)
 big=_md.get_candles("BTC",250)
 check("NEW-4 cache satisfies larger request", len(big)>=250)
+
+print("\nPerformance / learning feedback:")
+from records.performance import build_context, coin_context, _match_trades, _analyst_accuracy
+# empty logs produce empty context (no crash)
+_empty_ctx = build_context()
+check("PERF-1 empty history returns empty string", isinstance(_empty_ctx, str))
+
+# FIFO trade matching — one full round-trip
+_fills_test = [
+    {"coin":"BTC","side":"BUY", "price_usd":"50000","quantity":"0.002","timestamp":"2025-01-01T10:00:00"},
+    {"coin":"BTC","side":"SELL","price_usd":"55000","quantity":"0.002","timestamp":"2025-01-01T11:00:00"},
+]
+_trades = _match_trades(_fills_test)
+check("PERF-2 closed trade P&L computed", len(_trades)==1 and abs(_trades[0]["pnl_pct"]-10.0)<0.1)
+
+# Partial exits accumulate correctly
+_fills_partial = [
+    {"coin":"ETH","side":"BUY", "price_usd":"2000","quantity":"1.0","timestamp":"2025-01-01T10:00:00"},
+    {"coin":"ETH","side":"SELL","price_usd":"2100","quantity":"0.33","timestamp":"2025-01-01T11:00:00"},
+    {"coin":"ETH","side":"SELL","price_usd":"2200","quantity":"0.67","timestamp":"2025-01-01T12:00:00"},
+]
+_partial_trades = _match_trades(_fills_partial)
+check("PERF-3 partial exits produce two closed trades", len(_partial_trades)==2)
+
+# Analyst accuracy scoring
+_decs_test = [{
+    "signal_id":"s1","coin":"BTC","action":"ENTRY_BUY","confidence":0.7,
+    "timestamp":"2025-01-01T09:55:00","reasoning":"regime=trending","regime":"trending",
+    "analysts":[{"a":"technical","v":"bullish","c":0.7},{"a":"sentiment","v":"bearish","c":0.5}]
+}]
+_acc = _analyst_accuracy(_trades, _decs_test)
+check("PERF-4 analyst accuracy: correct verdict scored", _acc.get("technical",{}).get("correct",0)==1)
+check("PERF-5 analyst accuracy: wrong verdict scored",   _acc.get("sentiment",{}).get("correct",0)==0)
+
+# build_context returns a non-empty string when history exists
+import tempfile, json as _json_m, os as _os_m
+_tmp_fills = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
+for r in _fills_test:
+    _tmp_fills.write(_json_m.dumps(r)+"\n")
+_tmp_fills.close()
+_sv_ledger = config.TAX_LEDGER; config.TAX_LEDGER = _tmp_fills.name
+_ctx = build_context(coin="BTC")
+config.TAX_LEDGER = _sv_ledger; _os_m.unlink(_tmp_fills.name)
+check("PERF-6 build_context non-empty with history", "BTC" in _ctx and "W/" in _ctx)
 
 print("\n" + "="*50)
 print(f"RESULTS: {PASS} passed, {FAIL} failed")

@@ -146,4 +146,4 @@ POSITIONS_FILE = os.path.join(STATE_DIR, "positions.json")
 STATUS_FILE = os.path.join(STATE_DIR, "status.json")   # dashboards read this
 EQUITY_HISTORY_FILE = os.path.join(STATE_DIR, "equity_history.json")  # for the equity chart
 
-VERSION = "5.0.0"
+VERSION = "6.0.0"

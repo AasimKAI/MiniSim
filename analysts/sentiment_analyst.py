@@ -7,13 +7,18 @@ the Pi and keeping all inference under one hard time budget.
 """
 from schemas.validators import validate_analyst_verdict
 from llm.quantized_client import chat_json
+from records.performance import coin_context
 
 
 def sentiment_analyst(coin, mcp):
     heads = mcp.headlines(coin) or []
+    perf = coin_context(coin)
+    perf_block = f"\n\n{perf}" if perf else ""
     system = ("You are a crypto market sentiment analyst. Read the headlines and "
-              "judge near-term sentiment for the coin.")
-    user = f"Coin: {coin}\nHeadlines:\n- " + "\n- ".join(heads)
+              "judge near-term sentiment for the coin. Where available, factor in "
+              "your recent trading history for this coin — if past trades have been "
+              "losing, weight bearish signals more heavily.")
+    user = f"Coin: {coin}\nHeadlines:\n- " + "\n- ".join(heads) + perf_block
     res = chat_json(system, user)
     verdict = res.get("verdict", "neutral")
     if verdict not in ("bullish", "bearish", "neutral"):

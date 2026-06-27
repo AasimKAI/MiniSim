@@ -15,7 +15,7 @@ def check(coin, action, price, balance, open_positions):
     if room <= 10:
         return 0.0, "veto", f"max exposure ${config.MAX_EXPOSURE_USD} reached (exp ${exposure:.0f})"
     size_usd = min(config.POSITION_SIZE_USD, room)
-    if action == "ENTRY_BUY" and size_usd > balance.get("cash_usd", 0):
+    if action in ("ENTRY_BUY", "ENTRY_SELL") and size_usd > balance.get("cash_usd", 0):
         size_usd = balance.get("cash_usd", 0) * 0.98
     if size_usd < 10:
         return 0.0, "veto", "insufficient cash / room"

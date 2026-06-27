@@ -1,44 +1,47 @@
 #!/usr/bin/env bash
-# Creates double-click desktop launchers pointing at THIS install location.
+# Creates double-click desktop launchers and installs them for the taskbar panel.
 set -e
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DESK="$HOME/Desktop"; mkdir -p "$DESK"
-PY="$DIR/.venv/bin/python"; [ -x "$PY" ] || PY="$(command -v python3)"
+APPS="$HOME/.local/share/applications"; mkdir -p "$APPS"
 TERM_CMD="lxterminal -e"; command -v lxterminal >/dev/null || TERM_CMD="x-terminal-emulator -e"
 
-cat > "$DESK/MiniSim Dashboard.desktop" <<DESKTOP
-[Desktop Entry]
+write_desktop() {
+  local name="$1"; shift
+  printf '%s' "$@" > "$DESK/$name"
+  cp "$DESK/$name" "$APPS/$name"
+  chmod +x "$DESK/$name" "$APPS/$name"
+  gio set "$DESK/$name" metadata::trusted true 2>/dev/null || true
+}
+
+write_desktop "minisim-dashboard.desktop" "[Desktop Entry]
 Type=Application
 Name=MiniSim Dashboard
-Comment=Open the MiniSim dashboard
-Exec=xdg-open http://localhost:8770/pi
+Comment=Open the MiniSim Pi dashboard
+Exec=bash -c 'chromium-browser --new-window http://localhost:8770/pi 2>/dev/null || xdg-open http://localhost:8770/pi'
 Icon=utilities-system-monitor
 Terminal=false
-DESKTOP
+Categories=Finance;
+"
 
-cat > "$DESK/Start MiniSim.desktop" <<DESKTOP
-[Desktop Entry]
+write_desktop "minisim-start.desktop" "[Desktop Entry]
 Type=Application
 Name=Start MiniSim
-Comment=Start the MiniSim engine + dashboard
-Exec=$TERM_CMD "bash -c 'systemctl --user start minisim-engine minisim-dashboard 2>/dev/null || \"$DIR/run.sh\"; sleep 2; xdg-open http://localhost:8770/pi'"
+Comment=Start the MiniSim trading engine and dashboard
+Exec=$TERM_CMD \"bash -c 'sudo systemctl start minisim minisim-dashboard 2>/dev/null; sleep 2; chromium-browser --new-window http://localhost:8770/pi 2>/dev/null || xdg-open http://localhost:8770/pi'\"
 Icon=media-playback-start
 Terminal=false
-DESKTOP
+Categories=Finance;
+"
 
-cat > "$DESK/Stop MiniSim.desktop" <<DESKTOP
-[Desktop Entry]
+write_desktop "minisim-stop.desktop" "[Desktop Entry]
 Type=Application
 Name=Stop MiniSim
-Comment=Stop MiniSim trading
-Exec=$TERM_CMD "bash -c 'systemctl --user stop minisim-engine minisim-dashboard 2>/dev/null; pkill -f main.py; pkill -f dashboard.server; echo Stopped; sleep 1'"
+Comment=Stop MiniSim trading engine and dashboard
+Exec=$TERM_CMD \"bash -c 'sudo systemctl stop minisim minisim-dashboard 2>/dev/null; echo Stopped.; sleep 1'\"
 Icon=media-playback-stop
 Terminal=false
-DESKTOP
+Categories=Finance;
+"
 
-chmod +x "$DESK"/*.desktop 2>/dev/null || true
-# mark them trusted on Raspberry Pi OS so double-click runs without a prompt
-for f in "$DESK"/MiniSim*.desktop "$DESK"/Start*.desktop "$DESK"/Stop*.desktop; do
-  gio set "$f" metadata::trusted true 2>/dev/null || true
-done
-echo "Desktop shortcuts created in $DESK"
+echo "Desktop shortcuts created in $DESK and $APPS"
