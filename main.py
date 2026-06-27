@@ -36,19 +36,24 @@ from strategies.router import (
 log = get_logger("main")
 
 
-def _strat_meta(strategy_name: str) -> dict:
+def _strat_meta(strategy_name: str, atr_pct: float | None = None) -> dict:
     """
     Build the position-metadata dict for a strategy so exit_manager
     can use strategy-specific SL/TP/trail instead of config defaults.
+    atr_pct: current ATR as % of price; if provided, strat_sl is widened
+             to max(strategy_default, 1.5 × ATR%) so volatile coins aren't
+             stopped out by normal candle noise.
     Returns {} if strategy_name is unknown.
     """
     inst = REGISTRY.get(strategy_name)
     if not inst:
         return {}
     p = inst.params
+    default_sl = round(p.sl_pct * 100, 3)
+    strat_sl   = max(default_sl, round(1.5 * atr_pct, 3)) if atr_pct else default_sl
     return {
         "strat_name":      strategy_name,
-        "strat_sl":        round(p.sl_pct    * 100, 3),   # fraction → percent
+        "strat_sl":        strat_sl,
         "strat_tp1":       round(p.tp1_pct   * 100, 3),
         "strat_tp2":       round(p.tp2_pct   * 100, 3),
         "strat_tp3":       round(p.tp3_pct   * 100, 3),
@@ -120,7 +125,8 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
 
     decision = engine.decide(coin, verdicts, regime,
                               strategy_signals=strategy_signals or None,
-                              macro_context=coin_ctx)
+                              macro_context=coin_ctx,
+                              macro_data=macro)
     return decision, price, verdicts, regime, candles
 
 
@@ -264,7 +270,15 @@ def run_cycle(mcp):
                 # Store strategy exit params on the position so exit_manager can use them
                 if chosen_strategy and order_side in ("BUY", "SHORT"):
                     try:
-                        mcp.update_meta(coin, **_strat_meta(chosen_strategy))
+                        from analysts.indicators import atr as _atr
+                        h_ = [c["high"]  for c in candles]
+                        l_ = [c["low"]   for c in candles]
+                        c_ = [c["close"] for c in candles]
+                        atr_val = _atr(h_, l_, c_, 14)
+                        atr_pct = (atr_val / price * 100) if (atr_val and price) else None
+                        if atr_pct:
+                            log.debug("  ATR=%.4f%% of price", atr_pct)
+                        mcp.update_meta(coin, **_strat_meta(chosen_strategy, atr_pct))
                         log.info("  strategy params stored on position: %s", chosen_strategy)
                     except Exception as e:
                         log.warning("  could not store strategy meta: %s", e)

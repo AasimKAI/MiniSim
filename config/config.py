@@ -68,7 +68,7 @@ MIN_ORDER_NOTIONAL_USD = 6.0          # Binance spot min is $5; 6 gives a small 
 FUTURES_LEVERAGE    = 1            # 1x = no leverage; increase only deliberately
 FUTURES_MARGIN_TYPE = "ISOLATED"   # ISOLATED is safer than CROSS for automated trading
 
-ROUTINE_SIGNAL_CONFIDENCE_MIN = 0.65
+ROUTINE_SIGNAL_CONFIDENCE_MIN = 0.68   # raised from 0.65 — filters borderline entries
 STRONG_SIGNAL_CONFIDENCE_MIN = 0.80
 
 # ----------------------------------------------------------------------------

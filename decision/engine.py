@@ -9,6 +9,7 @@ v5.1 — multi-strategy extension:
   so the LLM knows which strategies are firing for this coin and can choose
   which strategy's params to use for execution.
 """
+import datetime as _dt
 from config import config
 from common import get_logger
 from llm.quantized_client import chat_json
@@ -20,6 +21,64 @@ log = get_logger("decision")
 ANALYST_WEIGHTS = {"technical": 1.4, "volume": 0.7, "order_book": 0.7,
                    "on_chain": 0.5, "sentiment": 0.9}
 _SIGN = {"bullish": 1, "bearish": -1, "neutral": 0}
+
+# UTC hours to block new entries (thin liquidity / wide spreads)
+_QUIET_HOURS = set(range(0, 4))   # 00:00-03:59 UTC
+
+
+def _confirmation_gate(verdicts, direction):
+    """Require 2-of-3 independent confirmation signals.
+
+    Groups: (1) technical analyst, (2) volume analyst,
+    (3) at least one of {order_book, on_chain, sentiment}.
+    Prevents the LLM from entering on a single strong technical signal
+    when volume and sentiment are both silent.
+    """
+    tech_v = next((v for v in verdicts if v["analyst"] == "technical"), None)
+    vol_v  = next((v for v in verdicts if v["analyst"] == "volume"), None)
+    others = [v for v in verdicts if v["analyst"] not in ("technical", "volume")]
+
+    tech_ok   = bool(tech_v and tech_v["verdict"] == direction and tech_v["confidence"] > 0.45)
+    vol_ok    = bool(vol_v  and vol_v["verdict"]  == direction)
+    others_ok = any(v["verdict"] == direction for v in others)
+
+    confirmed = sum([tech_ok, vol_ok, others_ok])
+    return confirmed >= 2, f"confirm={confirmed}/3"
+
+
+def _macro_vetoes(coin, direction, macro_data):
+    """Hard macro vetoes — rule-based guards the LLM cannot override.
+
+    Rules:
+      • VIX > 28 → block longs  (risk-off regime)
+      • avg_funding > 0.08%/8h  → block longs  (longs crowded, squeeze risk)
+      • avg_funding < -0.06%/8h → block shorts (shorts crowded)
+      • BTC dominance ≥ 58%     → block alt longs (BTC season: alts underperform)
+    """
+    if not macro_data:
+        return False, ""
+
+    vetoes = []
+
+    vix = macro_data.get("tradfi", {}).get("vix", {}).get("price", 0.0) or 0.0
+    if vix > 28 and direction == "bullish":
+        vetoes.append(f"VIX={vix:.1f}>28(risk-off)")
+
+    funding = macro_data.get("funding_rates", {}) or {}
+    vals = [v for v in funding.values() if v is not None]
+    avg_fund_pct = sum(vals) / len(vals) * 100 if vals else 0.0
+    if avg_fund_pct > 0.08 and direction == "bullish":
+        vetoes.append(f"funding={avg_fund_pct:.4f}%>0.08(longs-crowded)")
+    if avg_fund_pct < -0.06 and direction == "bearish":
+        vetoes.append(f"funding={avg_fund_pct:.4f}%<-0.06(shorts-crowded)")
+
+    btc_dom = (macro_data.get("dominance") or {}).get("btc_dominance", 0.0) or 0.0
+    if btc_dom >= 58.0 and direction == "bullish" and coin not in ("BTC", "ETH"):
+        vetoes.append(f"btc_season(dom={btc_dom:.1f}%)")
+
+    if vetoes:
+        return True, "macro_veto:" + ";".join(vetoes)
+    return False, ""
 
 
 def regime_allows(regime):
@@ -123,13 +182,16 @@ def research(coin, verdicts, regime, strategy_signals=None, macro_context=""):
     return chat_json(sysmsg, user)
 
 
-def decide(coin, verdicts, regime, strategy_signals=None, macro_context=""):
+def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
+           macro_data=None):
     """
     Full decision pipeline.
 
     strategy_signals: optional list of dicts from Strategy.signal():
         [{"action": "BUY"|"SELL"|"HOLD", "confidence": float,
           "reason": str, "strategy": str}, ...]
+    macro_data: optional structured macro dict for hard vetoes (separate from
+        the text macro_context passed to the LLM).
 
     Returns:
         {"coin", "action", "confidence", "direction", "reasoning",
@@ -187,6 +249,29 @@ def decide(coin, verdicts, regime, strategy_signals=None, macro_context=""):
         f"ceo={ceo_dir}({ceo_conf:.2f}); agree={agree}; "
         f"strategy={chosen_strategy or 'none'}"
     )
+
+    # ── Post-LLM filters (rule-based, cannot be overridden by LLM) ───────────
+
+    # 1. Time-of-day: avoid entries during low-liquidity hours (00:00-03:59 UTC)
+    if action in ("ENTRY_BUY", "ENTRY_SELL"):
+        utc_h = _dt.datetime.utcnow().hour
+        if utc_h in _QUIET_HOURS:
+            action = "STAND_DOWN"
+            reasoning += f"; time_veto(UTC {utc_h:02d}h)"
+
+    # 2. Confirmation gate: require 2-of-3 signal groups to agree
+    if action in ("ENTRY_BUY", "ENTRY_SELL"):
+        gate_ok, gate_note = _confirmation_gate(verdicts, direction)
+        reasoning += f"; {gate_note}"
+        if not gate_ok:
+            action = "STAND_DOWN"
+
+    # 3. Hard macro vetoes
+    if action in ("ENTRY_BUY", "ENTRY_SELL"):
+        vetoed, veto_note = _macro_vetoes(coin, direction, macro_data)
+        if vetoed:
+            action = "STAND_DOWN"
+            reasoning += f"; {veto_note}"
 
     return {
         "coin":        coin,
