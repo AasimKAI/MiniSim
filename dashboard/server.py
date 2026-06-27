@@ -114,8 +114,8 @@ def build_app():
     def status(request: Request):
         _require_read(request)
         st = read_json(config.STATUS_FILE, {})
-        st.setdefault("mode", config.MODE)
-        st.setdefault("version", config.VERSION)
+        st["version"]    = config.VERSION   # always reflect live config, not cached file
+        st["mode"]       = config.MODE
         st["kill_switch"] = kill_switch.is_active()
         return JSONResponse(st)
 
