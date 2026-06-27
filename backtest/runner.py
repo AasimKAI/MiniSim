@@ -203,7 +203,7 @@ def _signal(coin: str, window: list[dict], conf_min: float,
     w_v = ANALYST_WEIGHTS.get("volume", 0.7)
     score = (w_t * _SIGN[tv["verdict"]] * tv["confidence"]
            + w_v * _SIGN[vv["verdict"]] * vv["confidence"]) / (w_t + w_v)
-    direction  = "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
+    direction  = "bullish" if score > 0.25 else "bearish" if score < -0.25 else "neutral"
     arith_conf = min(1.0, abs(score))
 
     if direction == "neutral" or arith_conf < conf_min:
@@ -225,6 +225,10 @@ def _signal(coin: str, window: list[dict], conf_min: float,
         vol_ok  = vv["verdict"] == direction
         if not (tech_ok and vol_ok):
             return "neutral", arith_conf
+
+    # HTF alignment: block entry when higher timeframe directly opposes LTF signal
+    if tv.get("metrics", {}).get("htf_conflict"):
+        return "neutral", arith_conf
 
     return direction, arith_conf
 

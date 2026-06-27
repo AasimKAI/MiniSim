@@ -140,6 +140,7 @@ def analyze(coin, candles):
     # higher-timeframe confirmation (e.g. 5x bars)
     htf = ind.resample(candles, 5)
     htf_dir = 0
+    metrics["htf_conflict"] = False
     if len(htf) >= 60:
         htf_score, _, _ = _score(htf)
         htf_dir = 1 if htf_score > 0 else -1 if htf_score < 0 else 0
@@ -149,6 +150,7 @@ def analyze(coin, candles):
         elif htf_dir != 0:
             score *= 0.6  # conflict -> dampen
             reasons.append("higher-timeframe conflicts (dampened)")
+            metrics["htf_conflict"] = True
 
     max_score = sum(WEIGHTS.values())
     confidence = min(1.0, abs(score) / (max_score * 0.55))

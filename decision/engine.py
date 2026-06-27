@@ -199,7 +199,7 @@ def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
     """
     allowed, reason = regime_allows(regime)
     score     = blend(verdicts)
-    direction = "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
+    direction = "bullish" if score > 0.25 else "bearish" if score < -0.25 else "neutral"
     arith_conf = min(1.0, abs(score))
 
     ceo = research(coin, verdicts, regime, strategy_signals=strategy_signals,
@@ -272,6 +272,13 @@ def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
         if vetoed:
             action = "STAND_DOWN"
             reasoning += f"; {veto_note}"
+
+    # 4. HTF alignment: block entry when higher timeframe directly opposes LTF signal
+    if action in ("ENTRY_BUY", "ENTRY_SELL"):
+        tech_v = next((v for v in verdicts if v["analyst"] == "technical"), None)
+        if tech_v and tech_v.get("metrics", {}).get("htf_conflict"):
+            action = "STAND_DOWN"
+            reasoning += "; htf_veto(higher-tf conflict)"
 
     return {
         "coin":        coin,

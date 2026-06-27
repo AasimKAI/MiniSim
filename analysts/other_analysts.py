@@ -11,9 +11,9 @@ def volume_analyst(coin, candles):
     avg = sum(vols[-30:-1]) / 29
     spike = vols[-1] / avg if avg else 1
     up = closes[-1] > closes[-2]
-    if spike > 1.8 and up:
+    if spike > 2.0 and up:
         return _v("volume", coin, "bullish", min(0.8, spike / 3), f"volume spike x{spike:.1f} on up candle")
-    if spike > 1.8 and not up:
+    if spike > 2.0 and not up:
         return _v("volume", coin, "bearish", min(0.8, spike / 3), f"volume spike x{spike:.1f} on down candle")
     return _v("volume", coin, "neutral", 0.2, f"volume normal (x{spike:.1f})")
 
