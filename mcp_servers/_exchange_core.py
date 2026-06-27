@@ -209,6 +209,7 @@ def place_order(coin, side, quantity, client_order_id=None):
             pnl = (short_pos["entry_price"] - price) * cover_qty
             collateral_return = short_pos["collateral"] * frac
             w["cash_usd"] += collateral_return + pnl
+            w["realized_short_pnl"] = w.get("realized_short_pnl", 0.0) + pnl
             short_pos["quantity"] -= cover_qty
             short_pos["collateral"] -= collateral_return
             quantity = cover_qty
@@ -336,6 +337,7 @@ def _ccxt_balance():
             for coin, s in w.get("shorts", {}).items():
                 equity += s["collateral"] + (s["entry_price"] - _mark(coin)) * s["quantity"]
                 n_open += 1
+            equity += w.get("realized_short_pnl", 0.0)
             cash = round(cash - short_collateral, 2)
 
         return {"cash_usd": round(cash, 2), "equity_usd": round(equity, 2),
