@@ -100,7 +100,7 @@ def _page(name):
 
 
 def build_app():
-    app = FastAPI(title="MiniSim v5 Dashboard")
+    app = FastAPI(title="MiniSim v6 Dashboard")
 
     @app.get("/", response_class=HTMLResponse)
     def mobile():

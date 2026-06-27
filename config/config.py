@@ -1,5 +1,5 @@
 """
-MiniSim v5 — central configuration.
+MiniSim v6 — central configuration.
 
 Everything you might want to change lives here. Plain-English comments on
 each line so a non-developer can adjust safely.
