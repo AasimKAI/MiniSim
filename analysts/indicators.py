@@ -35,9 +35,10 @@ def _ema_series(values, period):
         out.append(v * k + out[-1] * (1 - k))
     return out
 
-def rsi(closes, period=14):
+def _rsi_series(closes, period=14):
+    """Full RSI series in O(n) — one Wilder-smoothed pass."""
     if len(closes) < period + 1:
-        return None
+        return []
     gains, losses = [], []
     for i in range(1, len(closes)):
         d = closes[i] - closes[i - 1]
@@ -45,13 +46,16 @@ def rsi(closes, period=14):
         losses.append(max(-d, 0))
     avg_g = sum(gains[:period]) / period
     avg_l = sum(losses[:period]) / period
+    out = [100.0 if avg_l == 0 else 100 - 100 / (1 + avg_g / avg_l)]
     for i in range(period, len(gains)):
         avg_g = (avg_g * (period - 1) + gains[i]) / period
         avg_l = (avg_l * (period - 1) + losses[i]) / period
-    if avg_l == 0:
-        return 100.0
-    rs = avg_g / avg_l
-    return 100 - (100 / (1 + rs))
+        out.append(100.0 if avg_l == 0 else 100 - 100 / (1 + avg_g / avg_l))
+    return out
+
+def rsi(closes, period=14):
+    s = _rsi_series(closes, period)
+    return s[-1] if s else None
 
 def macd(closes, fast=12, slow=26, signal=9):
     if len(closes) < slow + signal:
@@ -242,11 +246,7 @@ def rsi_divergence(closes, period=14, lookback=40):
     Requires TWO swing lows/highs and an opposing RSI slope."""
     if len(closes) < period + lookback + 5:
         return "none"
-    rsis = []
-    for i in range(period + 1, len(closes) + 1):
-        r = rsi(closes[:i], period)
-        if r is not None:
-            rsis.append(r)
+    rsis = _rsi_series(closes, period)   # O(n) — was O(n²)
     n = min(len(closes), len(rsis))
     px, rs = closes[-n:], rsis[-n:]
 

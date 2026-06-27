@@ -25,15 +25,17 @@ Usage:
   python -m backtest.runner --compare              # new vs old settings
 """
 from __future__ import annotations
-import argparse, datetime, json, math, os, sys, time
+import argparse, datetime, hashlib, json, math, os, sys, time
 from dataclasses import dataclass, field
 from typing import Optional
 
 # ── paths ────────────────────────────────────────────────────────────────────
-_HERE   = os.path.dirname(os.path.abspath(__file__))
-_ROOT   = os.path.dirname(_HERE)
-_OUTDIR = os.path.join(_ROOT, "data", "backtest_results")
+_HERE     = os.path.dirname(os.path.abspath(__file__))
+_ROOT     = os.path.dirname(_HERE)
+_OUTDIR   = os.path.join(_ROOT, "data", "backtest_results")
+_CACHE    = os.path.join(_ROOT, ".bt_cache", "candles")
 sys.path.insert(0, _ROOT)
+os.makedirs(_CACHE, exist_ok=True)
 
 from analysts import technical_analyst as tech
 from analysts.other_analysts import volume_analyst
@@ -45,8 +47,16 @@ os.makedirs(_OUTDIR, exist_ok=True)
 
 # ── candle fetching ───────────────────────────────────────────────────────────
 def _fetch_candles_coin(coin: str, days: int, interval: str = "15m") -> list[dict]:
-    """Fetch up to `days` of historical candles from Binance (paginated)."""
+    """Fetch up to `days` of historical candles from Binance (paginated, disk-cached by day)."""
     import httpx
+    # Cache key includes coin, days, interval, and UTC day — stale after midnight
+    day_str  = datetime.datetime.utcnow().strftime("%Y%m%d")
+    key      = hashlib.md5(f"{coin}|{days}|{interval}|{day_str}".encode()).hexdigest()[:12]
+    cache_f  = os.path.join(_CACHE, f"{key}_{coin}.json")
+    if os.path.exists(cache_f):
+        with open(cache_f) as f:
+            return json.load(f)
+
     symbol   = f"{coin}USDT"
     end_ms   = int(time.time() * 1000)
     start_ms = end_ms - days * 86_400_000
@@ -78,6 +88,10 @@ def _fetch_candles_coin(coin: str, days: int, interval: str = "15m") -> list[dic
         except Exception as e:
             print(f"  WARNING: fetch error for {coin}: {e}")
             break
+
+    if candles:
+        with open(cache_f, "w") as f:
+            json.dump(candles, f)
     return candles
 
 

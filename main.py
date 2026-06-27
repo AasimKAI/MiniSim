@@ -74,16 +74,17 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
     Candles are returned so run_cycle can accumulate them for the router.
     macro: optional dict with keys 'fear_greed' and 'funding_rates'.
     """
-    candles = mcp.candles(coin, 300)   # 300 × 15 min = 75 h, enough for EMA200 + all indicators
-    ticker  = mcp.ticker(coin)
-    ob      = mcp.orderbook(coin)
-    price   = ticker["price"]
+    candles      = mcp.candles(coin, 300)   # 300 × 15 min = 75 h
+    ticker       = mcp.ticker(coin)
+    ob           = mcp.orderbook(coin)
+    taker_ratio  = mcp.taker_ratio(coin)
+    price        = ticker["price"]
 
     verdicts = [
         tech.analyze(coin, candles),
         volume_analyst(coin, candles),
         order_book_analyst(coin, ob),
-        on_chain_analyst(coin, ticker),
+        on_chain_analyst(coin, ticker, taker_ratio),
         sentiment_analyst(coin, mcp),
     ]
     macro = macro or {}

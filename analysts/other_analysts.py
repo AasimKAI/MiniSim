@@ -27,14 +27,23 @@ def order_book_analyst(coin, ob):
     return _v("order_book", coin, "neutral", 0.2, f"balanced book ({imb:+.2f})")
 
 
-def on_chain_analyst(coin, ticker):
-    # Placeholder arithmetic proxy until an on-chain MCP feed is added.
-    ch = ticker.get("change_24h_pct", 0)
-    if ch > 4:
-        return _v("on_chain", coin, "bullish", 0.4, "strong 24h momentum proxy")
-    if ch < -4:
-        return _v("on_chain", coin, "bearish", 0.4, "weak 24h momentum proxy")
-    return _v("on_chain", coin, "neutral", 0.2, "flat momentum proxy")
+def on_chain_analyst(coin, ticker, taker_ratio: float = 0.5):
+    """Taker buy/sell pressure from Binance 24hr data.
+
+    taker_ratio = takerBuyVol / totalVol (0–1). Values far from 0.5 indicate
+    aggressive directional flow — a leading indicator unlike lagging price change.
+    """
+    deviation = taker_ratio - 0.5   # positive = buy pressure, negative = sell pressure
+    if deviation > 0.08:
+        conf = min(0.75, deviation * 5)
+        return _v("on_chain", coin, "bullish", round(conf, 3),
+                  f"taker buy ratio {taker_ratio:.2f} (buy-heavy flow)")
+    if deviation < -0.08:
+        conf = min(0.75, abs(deviation) * 5)
+        return _v("on_chain", coin, "bearish", round(conf, 3),
+                  f"taker buy ratio {taker_ratio:.2f} (sell-heavy flow)")
+    return _v("on_chain", coin, "neutral", 0.15,
+              f"taker buy ratio {taker_ratio:.2f} (balanced flow)")
 
 
 def _v(a, coin, verdict, conf, reason):

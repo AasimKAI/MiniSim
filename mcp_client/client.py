@@ -175,6 +175,10 @@ class MCPClient:
     def orderbook(self, coin):
         return self.call("market_data", "get_orderbook", coin=coin)
 
+    def taker_ratio(self, coin) -> float:
+        r = self.call("market_data", "get_taker_ratio", coin=coin)
+        return float(r) if r is not None else 0.5
+
     def headlines(self, coin, limit=5):
         return self.call("news_sentiment", "get_headlines", coin=coin, limit=limit) or []
 

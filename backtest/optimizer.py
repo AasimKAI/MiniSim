@@ -16,7 +16,7 @@ Usage:
   python -m backtest.optimizer --top 15      # show top 15 combos
 """
 from __future__ import annotations
-import argparse, json, os, sys, time
+import argparse, hashlib, json, os, sys, time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -160,14 +160,30 @@ def run(days: int = 90, coins: list[str] | None = None,
         candle_cache[coin] = c
         print(f"{len(c)} candles")
 
-    # 2. Precompute entry signals (expensive — once per coin)
+    # 2. Precompute entry signals (expensive — cached to disk after first run)
+    cache_dir = os.path.join(os.path.dirname(_HERE), ".bt_cache", "entries")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    def _entry_cache_key(coin, candles):
+        sig = f"{coin}|{CONF_MIN}|{SIGNAL_STEP}|{WINDOW}|{candles[-1]['timestamp']}"
+        return hashlib.md5(sig.encode()).hexdigest()[:12]
+
     print("\nPrecomputing entry signals…")
     entry_cache: dict[str, list] = {}
     for coin in coins:
-        t0 = time.time()
-        e = _precompute_entries(coin, candle_cache[coin])
+        key  = _entry_cache_key(coin, candle_cache[coin])
+        path = os.path.join(cache_dir, f"{key}_{coin}.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                e = [tuple(x) for x in json.load(f)]
+            print(f"  {coin}: {len(e)} entries (cached)")
+        else:
+            t0 = time.time()
+            e = _precompute_entries(coin, candle_cache[coin])
+            with open(path, "w") as f:
+                json.dump(e, f)
+            print(f"  {coin}: {len(e)} potential entries ({time.time()-t0:.1f}s)")
         entry_cache[coin] = e
-        print(f"  {coin}: {len(e)} potential entries ({time.time()-t0:.1f}s)")
 
     total_entries = sum(len(v) for v in entry_cache.values())
     print(f"\nTotal potential entries across all coins: {total_entries}")

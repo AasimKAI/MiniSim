@@ -19,8 +19,13 @@ try:
 
     @mcp.tool()
     def get_orderbook(coin: str) -> dict:
-        """Return L1 order-book imbalance and spread for a coin."""
+        """Return real L2 order-book depth imbalance (top-20 levels) for a coin."""
         return core.get_orderbook(coin)
+
+    @mcp.tool()
+    def get_taker_ratio(coin: str) -> float:
+        """Return 24h taker buy ratio (takerBuyVol / totalVol). >0.5 = bullish pressure."""
+        return core.get_taker_ratio(coin)
 
     def main():
         mcp.run(transport="stdio")

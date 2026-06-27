@@ -180,13 +180,90 @@ def get_ticker(coin):
             "ts": last_t, "source": _CACHE.get(coin, {}).get("source", "unknown")}
 
 
+_OB_CACHE: dict = {}   # coin -> (fetched_at, result)
+
 def get_orderbook(coin):
-    """L1 order-book imbalance. (A real L2 book would come from the exchange feed;
-    this is a lightweight proxy and is labelled approximate.)"""
-    s = _seed(coin, int(time.time() // 60))
-    bid_vol = 1000 * (0.5 + s)
-    ask_vol = 1000 * (1.5 - s)
-    imbalance = (bid_vol - ask_vol) / (bid_vol + ask_vol)
-    return {"coin": coin, "bid_volume": round(bid_vol, 1), "ask_volume": round(ask_vol, 1),
-            "imbalance": round(imbalance, 3), "spread_bps": round(2 + s * 8, 2),
-            "approximate": True}
+    """Real L2 order-book depth imbalance from Binance (top-20 levels, cached 30s).
+
+    Imbalance = (bid_qty - ask_qty) / (bid_qty + ask_qty) in [-1, +1].
+    Positive = bid-heavy (buy pressure). Negative = ask-heavy (sell pressure).
+    This is a leading indicator — passive orders anticipate near-term price direction.
+    Falls back to neutral on any API error.
+    """
+    now = time.time()
+    cached = _OB_CACHE.get(coin)
+    if cached and now - cached[0] < 30:
+        return cached[1]
+
+    symbol = _BINANCE_SYMBOLS.get(coin)
+    result = {"coin": coin, "bid_volume": 0.0, "ask_volume": 0.0,
+              "imbalance": 0.0, "spread_bps": 0.0, "approximate": False}
+
+    if symbol and config.MODE in ("paper", "testnet", "live"):
+        try:
+            import httpx
+            r = httpx.get(
+                "https://api.binance.com/api/v3/depth",
+                params={"symbol": symbol, "limit": 20},
+                timeout=5.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+            bid_qty = sum(float(b[1]) for b in data.get("bids", []))
+            ask_qty = sum(float(a[1]) for a in data.get("asks", []))
+            total   = bid_qty + ask_qty
+            imb     = (bid_qty - ask_qty) / total if total else 0.0
+            # Spread in bps from best bid/ask
+            best_bid = float(data["bids"][0][0]) if data.get("bids") else 0
+            best_ask = float(data["asks"][0][0]) if data.get("asks") else 0
+            spread_bps = ((best_ask - best_bid) / best_bid * 10000) if best_bid else 0
+            result = {"coin": coin,
+                      "bid_volume": round(bid_qty, 2), "ask_volume": round(ask_qty, 2),
+                      "imbalance": round(imb, 4), "spread_bps": round(spread_bps, 2),
+                      "approximate": False}
+        except Exception:
+            pass   # neutral fallback
+
+    _OB_CACHE[coin] = (now, result)
+    return result
+
+
+_TAKER_CACHE: dict = {}   # coin -> (fetched_at, ratio)
+
+def get_taker_ratio(coin) -> float:
+    """Taker buy ratio from last 500 Binance spot aggTrades (cached 60s).
+
+    Binance aggTrades: m=False means BUYER was taker (aggressive buy);
+    m=True means SELLER was taker (aggressive sell).
+    ratio = buy_qty / total_qty in [0, 1].
+    > 0.5 = buy-heavy flow (bullish pressure — leading indicator).
+    < 0.5 = sell-heavy flow (bearish pressure).
+    Returns 0.5 (neutral) on failure or fixture mode.
+    """
+    now = time.time()
+    cached = _TAKER_CACHE.get(coin)
+    if cached and now - cached[0] < 60:
+        return cached[1]
+
+    symbol = _BINANCE_SYMBOLS.get(coin)
+    ratio = 0.5  # neutral fallback
+
+    if symbol and config.MODE in ("paper", "testnet", "live"):
+        try:
+            import httpx
+            r = httpx.get(
+                "https://api.binance.com/api/v3/aggTrades",
+                params={"symbol": symbol, "limit": 500},
+                timeout=5.0,
+            )
+            r.raise_for_status()
+            trades    = r.json()
+            buy_qty   = sum(float(t["q"]) for t in trades if not t["m"])
+            total_qty = sum(float(t["q"]) for t in trades)
+            if total_qty > 0:
+                ratio = round(buy_qty / total_qty, 4)
+        except Exception:
+            pass
+
+    _TAKER_CACHE[coin] = (now, ratio)
+    return ratio
