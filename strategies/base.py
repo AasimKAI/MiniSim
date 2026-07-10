@@ -115,7 +115,8 @@ class Strategy(ABC):
         )
 
         try:
-            result = chat_json(sysmsg, user)
+            result = chat_json(sysmsg, user,
+                               schema_keys=("action", "confidence", "reasoning"))
             action = str(result.get("action", "HOLD")).upper().strip()
             if action not in ("BUY", "SELL", "HOLD"):
                 action = "HOLD"

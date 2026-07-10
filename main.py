@@ -279,7 +279,7 @@ def run_cycle(mcp):
                         atr_pct = (atr_val / price * 100) if (atr_val and price) else None
                         if atr_pct:
                             log.debug("  ATR=%.4f%% of price", atr_pct)
-                        mcp.update_meta(coin, **_strat_meta(chosen_strategy, atr_pct))
+                        mcp.update_meta(coin, extra=_strat_meta(chosen_strategy, atr_pct))
                         log.info("  strategy params stored on position: %s", chosen_strategy)
                     except Exception as e:
                         log.warning("  could not store strategy meta: %s", e)

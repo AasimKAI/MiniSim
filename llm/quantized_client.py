@@ -91,11 +91,18 @@ def _extract_json(text):
     return json.loads(m.group(0))
 
 
-def chat_json(system, user, schema_keys=("verdict", "confidence", "reasoning")):
+def chat_json(system, user, schema_keys=("verdict", "confidence", "reasoning"),
+              schema=None):
     """
     Run the LLM and return a validated dict. Never raises to the caller —
     on any failure it returns a safe neutral/abstain result so the trading
     system stands down rather than acting on garbage.
+
+    schema_keys: keys guaranteed present in the result; also drives the JSON
+                 instruction appended to the system prompt.
+    schema:      optional JSON-schema dict for structured calls (e.g. the
+                 strategy router). Its 'required' keys take precedence over
+                 schema_keys and the schema itself is embedded in the prompt.
     """
     backends = {"llamacpp": _chat_llamacpp, "ollama": _chat_ollama, "stub": _chat_stub}
     fn = backends.get(config.LLM_BACKEND, _chat_llamacpp)
@@ -118,13 +125,14 @@ def chat_json(system, user, schema_keys=("verdict", "confidence", "reasoning")):
         busy = _INFLIGHT is not None and not _INFLIGHT.done()
         if busy:
             return _fallback("busy")
-        fut = _EXEC.submit(fn, config_prompt_guard(system), user)
+        fut = _EXEC.submit(fn, config_prompt_guard(system, schema_keys, schema), user)
         _INFLIGHT = fut
     try:
         t0 = time.time()
         raw = fut.result(timeout=config.LLM_TIMEOUT_SEC)
         data = _extract_json(raw)
-        for k in schema_keys:
+        required = (schema or {}).get("required") or schema_keys
+        for k in required:
             data.setdefault(k, None)
         if data.get("confidence") is None:
             data["confidence"] = 0.0
@@ -148,12 +156,29 @@ def _fallback(reason):
     return out
 
 
-def config_prompt_guard(system):
-    """Append a hard instruction to always return strict JSON."""
+def config_prompt_guard(system, schema_keys=None, schema=None):
+    """Append a hard instruction to always return strict JSON.
+
+    The key list is derived from the caller's schema_keys/schema so the guard
+    never contradicts the user prompt (the old fixed verdict/confidence guard
+    conflicted with strategy calls that ask for an 'action' key)."""
+    if schema:
+        return (system +
+                "\n\nRespond ONLY with a single minified JSON object matching "
+                "this JSON schema. No prose, no markdown.\nSchema: " +
+                json.dumps(schema))
+    hints = {
+        "verdict":    "verdict (bullish|bearish|neutral)",
+        "action":     "action (BUY|SELL|HOLD)",
+        "confidence": "confidence (0.0-1.0 number)",
+        "reasoning":  "reasoning (short string)",
+        "strategy":   "strategy (name of chosen strategy, or null)",
+    }
+    keys = schema_keys or ("verdict", "confidence", "reasoning")
+    listed = ", ".join(hints.get(k, k) for k in keys)
     return (system +
             "\n\nRespond ONLY with a single minified JSON object. "
-            "No prose, no markdown. Keys: verdict (bullish|bearish|neutral), "
-            "confidence (0.0-1.0 number), reasoning (short string).")
+            "No prose, no markdown. Keys: " + listed + ".")
 
 
 def healthcheck():

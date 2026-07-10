@@ -62,7 +62,12 @@ def _load_meta():
 def position_meta():
     return _load_meta()
 
-def update_meta(coin, peak_pnl=None, add_target=None):
+def update_meta(coin, peak_pnl=None, add_target=None, extra=None):
+    """Persist exit-tracking state and optional per-position overrides.
+
+    extra: dict of additional keys (e.g. strat_sl, strat_tp1…) stored on the
+    position meta so exit_manager can use strategy-specific exits. peak_pnl
+    and targets_taken can never be clobbered through extra."""
     with _wallet_lock():
         m = _load_meta()
         cur = m.get(coin, {"peak_pnl": None, "targets_taken": []})
@@ -71,6 +76,9 @@ def update_meta(coin, peak_pnl=None, add_target=None):
                                else max(cur["peak_pnl"], peak_pnl))
         if add_target is not None and add_target not in cur["targets_taken"]:
             cur["targets_taken"].append(add_target)
+        if extra:
+            cur.update({k: v for k, v in extra.items()
+                        if k not in ("peak_pnl", "targets_taken")})
         m[coin] = cur
         atomic_write_json(_META, m)
     return m[coin]
@@ -131,7 +139,8 @@ def positions():
         else:
             pnl_pct = (price - p["entry_price"]) / p["entry_price"] * 100 if p["entry_price"] else 0
         mm = meta.get(coin, {})
-        out.append({**p, "current_price": price,
+        # Merge ALL meta keys (incl. strat_* overrides) so exit_manager sees them
+        out.append({**p, **mm, "current_price": price,
                     "unrealised_pnl_pct": round(pnl_pct, 2),
                     "peak_pnl": mm.get("peak_pnl"),
                     "targets_taken": mm.get("targets_taken", [])})

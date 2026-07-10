@@ -222,8 +222,8 @@ Respond with JSON containing:
 
     try:
         result = chat_json(sysmsg, user, schema=schema)
-        # Validate returned names are real
-        valid = [n for n in result.get("active_strategies", []) if n in REGISTRY]
+        # Validate returned names are real (None/malformed output → default)
+        valid = [n for n in (result.get("active_strategies") or []) if n in REGISTRY]
         if not valid:
             valid = ["RangeScalp"]
         result["active_strategies"] = valid

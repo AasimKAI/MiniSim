@@ -35,7 +35,8 @@ _FALLBACK = {
     ("exchange", "place_order"): lambda a: _ex.place_order(
         a["coin"], a["side"], a["quantity"], a.get("client_order_id") or None),
     ("exchange", "update_meta"): lambda a: _ex.update_meta(
-        a["coin"], a.get("peak_pnl"), a.get("add_target")),
+        a["coin"], a.get("peak_pnl"), a.get("add_target"), a.get("extra")),
+    ("market_data", "get_taker_ratio"): lambda a: _md.get_taker_ratio(a["coin"]),
     ("macro", "get_fear_greed"):      lambda a: _macro.get_fear_greed(),
     ("macro", "get_funding_rates"):   lambda a: _macro.get_funding_rates(),
     ("macro", "get_dominance"):       lambda a: _macro.get_dominance(),
@@ -192,9 +193,11 @@ class MCPClient:
         return self.call("exchange", "place_order", coin=coin, side=side,
                          quantity=quantity, client_order_id=client_order_id or "")
 
-    def update_meta(self, coin, peak_pnl=None, add_target=None):
+    def update_meta(self, coin, peak_pnl=None, add_target=None, extra=None):
+        """extra: optional dict of per-position overrides (e.g. strat_sl,
+        strat_tp1…) persisted in position meta and merged into positions()."""
         return self.call("exchange", "update_meta", coin=coin,
-                         peak_pnl=peak_pnl, add_target=add_target)
+                         peak_pnl=peak_pnl, add_target=add_target, extra=extra)
 
     def fear_greed(self):
         return self.call("macro", "get_fear_greed") or {}

@@ -179,7 +179,9 @@ def research(coin, verdicts, regime, strategy_signals=None, macro_context=""):
         f"Reply JSON with keys: verdict (bullish|bearish|neutral), confidence (0-1)."
         f"{strategy_instr}"
     )
-    return chat_json(sysmsg, user)
+    keys = (("verdict", "confidence", "reasoning", "strategy")
+            if has_strategies else ("verdict", "confidence", "reasoning"))
+    return chat_json(sysmsg, user, schema_keys=keys)
 
 
 def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
