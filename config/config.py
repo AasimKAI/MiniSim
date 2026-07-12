@@ -152,6 +152,9 @@ KILL_SWITCH_FILE = os.path.join(STATE_DIR, "kill_switch.lock")
 
 DECISION_LOG = os.path.join(DATA_DIR, "decision_log.jsonl")
 TAX_LEDGER = os.path.join(DATA_DIR, "tax_ledger.jsonl")
+# Orders whose outcome is UNKNOWN (transport died mid-flight — may have filled)
+# are appended here for manual reconciliation against the exchange history.
+RECONCILIATION_LOG = os.path.join(DATA_DIR, "reconciliation.jsonl")
 POSITIONS_FILE = os.path.join(STATE_DIR, "positions.json")
 STATUS_FILE = os.path.join(STATE_DIR, "status.json")   # dashboards read this
 EQUITY_HISTORY_FILE = os.path.join(STATE_DIR, "equity_history.json")  # for the equity chart

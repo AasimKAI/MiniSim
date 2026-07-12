@@ -429,6 +429,19 @@ def _ccxt_positions():
 
 # ---------- order placement (ccxt) ----------
 
+def _to_precision(ex, symbol, quantity):
+    """Round a raw quantity to the exchange's LOT_SIZE step. Binance rejects
+    orders whose amount doesn't match the symbol's stepSize filter — a raw
+    round(usd/price, 6) fails on many symbols (e.g. DOGE step=1, BTC=1e-5).
+    Returns 0.0 if the quantity rounds below the minimum tradable step."""
+    try:
+        if not getattr(ex, "markets", None):
+            ex.load_markets()
+        return float(ex.amount_to_precision(symbol, quantity))
+    except Exception:
+        return quantity   # precision data unavailable — let the exchange decide
+
+
 def _ccxt_order(coin, side, quantity, coid):
     """Route to spot (BUY/SELL) or futures (SHORT/COVER) exchange."""
     if side in ("SHORT", "COVER"):
@@ -446,6 +459,10 @@ def _ccxt_order(coin, side, quantity, coid):
             if held <= 0:
                 return {"status": "rejected", "reason": "no base balance to sell"}
             quantity = min(quantity, held)
+        quantity = _to_precision(ex, symbol, quantity)
+        if quantity <= 0:
+            return {"status": "rejected",
+                    "reason": "quantity below exchange LOT_SIZE precision"}
         params = {"newClientOrderId": coid} if coid else {}
         order = ex.create_order(symbol, "market", side.lower(), quantity, params=params)
         px     = order.get("average") or order.get("price")
@@ -464,6 +481,10 @@ def _ccxt_futures_order(coin, side, quantity, coid):
         fex    = _futures_client()
         symbol = f"{coin}/USDT"
         _init_futures_symbol(fex, symbol)
+        quantity = _to_precision(fex, symbol, quantity)
+        if quantity <= 0:
+            return {"status": "rejected",
+                    "reason": "quantity below exchange LOT_SIZE precision"}
 
         if side == "SHORT":
             order_side = "sell"
