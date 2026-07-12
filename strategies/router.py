@@ -216,6 +216,9 @@ Respond with JSON containing:
     }
 
     try:
+        # v7 chat_json supports schema= natively: the full JSON schema is
+        # embedded in the prompt guard and its 'required' keys are guaranteed
+        # present in the result (supersedes the v6 schema_keys hotfix).
         result = chat_json(sysmsg, user, schema=schema)
         # Validate returned names are real (None/malformed output → default)
         valid = [n for n in (result.get("active_strategies") or []) if n in REGISTRY]
