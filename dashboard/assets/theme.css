@@ -1,0 +1,174 @@
+/* MiniSim dashboard theme — shared design system for all four views.
+   Dark-only by design (trading kiosk + phone). Tokens follow the validated
+   dark reference palette: warm-neutral surfaces, status colors that always
+   ship with a text label, hairline chrome, tabular numerals for data. */
+
+:root{
+  /* surfaces */
+  --bg:#0d0d0d;            /* page plane */
+  --surface:#1a1a19;       /* card */
+  --surface2:#141413;      /* inset well */
+  --raised:#232322;        /* hover / raised */
+  --line:#2c2c2a;          /* hairline */
+  --baseline:#383835;      /* axis / stronger rule */
+  --ring:rgba(255,255,255,.10);
+
+  /* ink */
+  --ink:#ffffff;
+  --ink2:#c3c2b7;
+  --muted:#898781;
+
+  /* status + semantic (always paired with a label, never color-alone) */
+  --up:#0ca30c;   --up-wash:rgba(12,163,12,.12);   --up-line:rgba(12,163,12,.38);
+  --dn:#d03b3b;   --dn-wash:rgba(208,59,59,.12);   --dn-line:rgba(208,59,59,.42);
+  --warn:#fab219; --warn-wash:rgba(250,178,25,.10);--warn-line:rgba(250,178,25,.38);
+  --acc:#3987e5;  --acc-wash:rgba(57,135,229,.13); --acc-line:rgba(57,135,229,.42);
+  --violet:#9085e9;--violet-wash:rgba(144,133,233,.12);--violet-line:rgba(144,133,233,.40);
+  --serious:#ec835a;
+
+  --r:14px; --r-sm:9px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);
+     -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--acc)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--baseline);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+.num{font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.dn{color:var(--dn)}.dim{color:var(--muted)}.warn{color:var(--warn)}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+.topbar{position:sticky;top:0;z-index:99;min-height:52px;
+        display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;
+        padding:8px 12px;
+        background:rgba(13,13,13,.88);backdrop-filter:blur(10px);
+        border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.brand .name{font-size:15px;font-weight:750;letter-spacing:.2px}
+.brand .ver{font-size:10px;color:var(--muted);font-weight:500}
+.spacer{flex:1}
+.navlink{font-size:11px;font-weight:600;color:var(--ink2);text-decoration:none;
+         padding:5px 10px;border-radius:99px;border:1px solid var(--line);
+         background:var(--surface);white-space:nowrap}
+.navlink:active{opacity:.7}
+.navlink.here{color:var(--ink);border-color:var(--baseline);background:var(--raised)}
+
+/* chips (small status units in bars) */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);
+      padding:4px 9px;border-radius:99px;background:var(--surface);
+      border:1px solid var(--line);white-space:nowrap}
+.chip b{color:var(--ink2);font-weight:650}
+.chip.click{cursor:pointer}
+.chip.click:hover{border-color:var(--baseline);background:var(--raised)}
+
+/* live pulse dot */
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--baseline);
+       flex-shrink:0;transition:background .4s,box-shadow .4s}
+.pulse.on{background:var(--up);box-shadow:0 0 6px var(--up)}
+
+/* regime — status color + text label (never color alone) */
+.regime{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+        padding:3px 10px;border-radius:99px;white-space:nowrap;
+        color:var(--muted);background:var(--surface);border:1px solid var(--line)}
+.regime.bull{color:var(--up);background:var(--up-wash);border-color:var(--up-line)}
+.regime.bear{color:var(--dn);background:var(--dn-wash);border-color:var(--dn-line)}
+.regime.range{color:var(--warn);background:var(--warn-wash);border-color:var(--warn-line)}
+.regime.vol{color:var(--violet);background:var(--violet-wash);border-color:var(--violet-line)}
+
+/* ── layout primitives ───────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.card.pad{padding:14px}
+.well{background:var(--surface2);border:1px solid var(--line);border-radius:var(--r-sm)}
+.lab{color:var(--muted);font-size:10px;font-weight:650;text-transform:uppercase;
+     letter-spacing:1.4px}
+.hair{border:none;border-top:1px solid var(--line)}
+
+/* stat tiles */
+.tiles{display:grid;gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);
+      padding:10px 12px;min-width:0}
+.tile .t-lab{color:var(--muted);font-size:9px;font-weight:650;text-transform:uppercase;
+             letter-spacing:1px}
+.tile .t-val{font-size:19px;font-weight:750;line-height:1.15;margin-top:3px;
+             font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.tile .t-sub{color:var(--muted);font-size:10px;margin-top:2px}
+
+/* tags — side / outcome */
+.tag{display:inline-flex;align-items:center;font-size:9px;font-weight:700;
+     letter-spacing:.6px;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.tag.LONG,.tag.long{color:var(--acc);background:var(--acc-wash);border:1px solid var(--acc-line)}
+.tag.SHORT,.tag.short{color:var(--warn);background:var(--warn-wash);border:1px solid var(--warn-line)}
+.tag.BOTH{color:var(--ink2);background:var(--surface2);border:1px solid var(--line)}
+.tag.profit{color:var(--up);background:var(--up-wash);border:1px solid var(--up-line)}
+.tag.loss{color:var(--dn);background:var(--dn-wash);border:1px solid var(--dn-line)}
+.tag.plain{color:var(--muted);background:var(--surface2);border:1px solid var(--line)}
+
+/* coin avatar */
+.coin-dot{border-radius:50%;flex-shrink:0;display:inline-flex;align-items:center;
+          justify-content:center;font-weight:800;color:#fff;letter-spacing:-.2px;
+          box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+
+/* thin meter bar (confidence / pnl progress) */
+.meter{height:3px;border-radius:2px;background:var(--surface2);overflow:hidden}
+.meter>i{display:block;height:100%;border-radius:2px;
+         transition:width .7s cubic-bezier(.4,0,.2,1)}
+.meter>i.buy{background:var(--up)}
+.meter>i.sell{background:var(--dn)}
+.meter>i.sd{background:var(--baseline)}
+
+/* analyst verdict dots (color + title label) */
+.adots{display:flex;gap:3px}
+.adot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* analyst verdict chips (modal / report) */
+.av{font-size:10.5px;padding:4px 9px;border-radius:7px;color:var(--muted);
+    background:var(--surface2);border:1px solid var(--line)}
+.av b{font-weight:700}
+.av.bull b{color:var(--up)}.av.bear b{color:var(--dn)}.av.neut b{color:var(--ink2)}
+
+/* buttons */
+.btn{font-family:var(--font);font-size:12px;font-weight:700;letter-spacing:.3px;
+     padding:9px 14px;border-radius:10px;border:1px solid var(--line);cursor:pointer;
+     background:var(--surface);color:var(--ink2);transition:background .15s,opacity .15s}
+.btn:active{opacity:.75}
+.btn.danger{color:#ff9c93;background:rgba(208,59,59,.14);border-color:var(--dn-line)}
+.btn.safe{color:#7ee0a0;background:var(--up-wash);border-color:var(--up-line)}
+
+/* ── overlays / modals ───────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);
+         z-index:200;display:none;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--baseline);border-radius:16px;
+       padding:16px;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.modal-close{position:absolute;top:10px;right:12px;background:none;border:none;
+             color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+.modal-close:hover{color:var(--ink)}
+.modal-loading{color:var(--muted);font-size:12px;padding:60px;text-align:center}
+
+/* chart hover tooltip (shared by all canvas charts) */
+.viz-tip{position:fixed;z-index:300;pointer-events:none;display:none;
+         background:#232322;border:1px solid var(--baseline);border-radius:8px;
+         padding:6px 9px;font-size:11px;color:var(--ink2);line-height:1.5;
+         box-shadow:0 8px 24px rgba(0,0,0,.45);white-space:nowrap;
+         font-variant-numeric:tabular-nums}
+.viz-tip b{color:var(--ink);font-weight:650}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;color:var(--muted);font-size:9px;font-weight:650;
+        text-transform:uppercase;letter-spacing:.8px;padding:9px 12px 7px;
+        border-bottom:1px solid var(--line);white-space:nowrap;
+        position:sticky;top:0;background:var(--surface);z-index:1}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover{background:rgba(255,255,255,.025)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+/* backwards fill: hidden only DURING the stagger delay; if animations are
+   paused/disabled the element stays visible — the fade is never load-bearing */
+.fade{animation:fadeUp .32s ease backwards}

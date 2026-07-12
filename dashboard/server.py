@@ -99,8 +99,25 @@ def _page(name):
     return html.replace("__CSRF__", CSRF_TOKEN)
 
 
+_ASSETS = {                      # allowlist — never serve arbitrary paths
+    "theme.css": "text/css",
+    "app.js": "application/javascript",
+}
+
+
 def build_app():
     app = FastAPI(title="MiniSim Dashboard")
+
+    @app.get("/assets/{name}")
+    def assets(name: str):
+        """Shared design-system assets used by all four views."""
+        from fastapi.responses import Response
+        mime = _ASSETS.get(name)
+        if not mime:
+            raise HTTPException(status_code=404, detail="not found")
+        with open(os.path.join(HERE, "assets", name)) as f:
+            return Response(f.read(), media_type=mime,
+                            headers={"Cache-Control": "no-cache"})
 
     @app.get("/", response_class=HTMLResponse)
     def mobile():

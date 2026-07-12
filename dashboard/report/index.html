@@ -4,462 +4,338 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="__CSRF__">
-<meta name="theme-color" content="#0b0e14">
+<meta name="theme-color" content="#0d0d0d">
 <title>MiniSim — Daily Report</title>
+<link rel="stylesheet" href="/assets/theme.css">
 <style>
-:root{
-  --bg:#0b0e14;--card:#151a23;--card2:#0e131b;--line:#222c3a;
-  --txt:#e6edf3;--dim:#8b98a9;
-  --up:#3fb950;--dn:#f85149;--warn:#d29922;--acc:#58a6ff;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--txt);
-     font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
-     padding-bottom:32px;min-height:100dvh}
+main{padding:14px;max-width:680px;margin:0 auto;padding-bottom:36px}
+.lab{display:block;margin:20px 0 9px}
+main .lab:first-child{margin-top:0}
+.lab small{font-size:9px;font-weight:400;letter-spacing:.4px;text-transform:none}
 
-.topbar{position:sticky;top:0;z-index:99;
-        background:rgba(11,14,20,.95);backdrop-filter:blur(8px);
-        border-bottom:1px solid var(--line);
-        display:flex;align-items:center;justify-content:space-between;
-        padding:0 12px;height:50px;gap:8px}
-.back{color:var(--acc);text-decoration:none;font-size:13px;flex-shrink:0}
-.date-nav{display:flex;align-items:center;gap:4px;flex:1;justify-content:center}
-.date-nav button{background:var(--card);border:1px solid var(--line);color:var(--txt);
-                 border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer}
-.date-nav button:active{opacity:.7}
-#date-label{font-size:13px;font-weight:600;min-width:120px;text-align:center}
-.today-btn{background:none;border:1px solid var(--acc);color:var(--acc);
-           border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;flex-shrink:0}
+/* date nav */
+.date-nav{display:flex;align-items:center;gap:6px;flex:1;justify-content:center;min-width:0}
+.date-nav .btn{padding:5px 12px;font-size:14px}
+#date-label{font-size:13px;font-weight:650;min-width:0;text-align:center;white-space:nowrap}
 
-.body{padding:12px 14px 0}
-.sep{height:12px}
-.lab{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:8px;margin-top:2px}
+/* hero */
+.hero-num{font-size:clamp(26px,8.5vw,34px);font-weight:800;line-height:1;
+          letter-spacing:-1.4px;font-variant-numeric:tabular-nums}
+.hero-pct{font-size:15px;font-weight:650;margin-left:6px}
+.hero-sub{color:var(--muted);font-size:11.5px;margin-top:5px}
+.hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pnl-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px 12px}
+.pnl-lab{font-size:11px;color:var(--muted)}
+.pnl-val{font-size:13px;font-weight:750;margin-left:auto;font-variant-numeric:tabular-nums}
+.hero-tiles{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px}
+.hero-tiles .t-val{font-size:17px}
 
-/* hero summary */
-.hero-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-.hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
-.eq-num{font-size:36px;font-weight:800;line-height:1;letter-spacing:-1.5px}
-.eq-pct{font-size:15px;font-weight:600;margin-left:6px}
-.eq-sub{color:var(--dim);font-size:12px;margin-top:3px}
-.pnl-row{display:flex;align-items:center;gap:8px;margin-top:8px;
-         padding:8px 10px;background:var(--card2);border-radius:8px;border:1px solid var(--line)}
-.pnl-label{font-size:11px;color:var(--dim)}
-.pnl-val{font-size:13px;font-weight:700;margin-left:auto}
-.regime-pill{font-size:10px;padding:2px 8px;border-radius:20px;text-transform:capitalize;
-             background:var(--card2);border:1px solid var(--line);color:var(--dim);flex-shrink:0}
-.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-.sbox{background:var(--card2);border:1px solid var(--line);border-radius:9px;
-      padding:9px 4px;text-align:center}
-.sval{font-size:18px;font-weight:700;line-height:1.1}
-.slab{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
-
-/* generic card */
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
-      padding:12px;margin-bottom:8px}
-
-/* entry cards — coloured left border */
-.entry-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
-            padding:12px;margin-bottom:8px;border-left-width:3px}
-.entry-card.long {border-left-color:var(--acc); background:#0e1520}
-.entry-card.short{border-left-color:var(--warn);background:#110e05}
+/* entry cards */
+.entry-card{padding:12px;margin-bottom:8px;border-left:3px solid var(--acc)}
+.entry-card.short{border-left-color:var(--warn)}
 .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.coin-name{font-size:16px;font-weight:700}
-.ts{color:var(--dim);font-size:11px;margin-top:2px}
-.conf-bar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:8px}
-.conf-bar{height:3px;border-radius:2px}
-.reasoning{font-size:12px;color:var(--txt);margin-top:7px;line-height:1.6;
-           padding:8px 10px;background:var(--card2);border-radius:7px;border:1px solid var(--line)}
-.reasoning b{color:var(--dim);font-weight:500}
+.coin-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.coin-name{font-size:15px;font-weight:750}
+.ts{color:var(--muted);font-size:11px;margin-top:3px}
+.conf{font-size:12.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.entry-card .meter{margin-top:9px}
+.reasoning{font-size:12px;margin-top:9px;line-height:1.65;padding:9px 11px}
+.reasoning b{color:var(--muted);font-weight:550}
 
 /* analyst grid */
-.analyst-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
-.av{background:var(--card2);border:1px solid var(--line);border-radius:7px;padding:5px 4px;text-align:center}
-.av-name{font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px}
-.av-verdict{font-size:10.5px;font-weight:700;margin-top:2px}
-.av-conf{font-size:9px;color:var(--dim);margin-top:1px}
-.bullish{color:var(--up)}.bearish{color:var(--dn)}.neutral{color:var(--dim)}
+.analyst-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:9px}
+.ag{background:var(--surface2);border:1px solid var(--line);border-radius:7px;
+    padding:6px 4px;text-align:center;min-width:0;overflow:hidden}
+.ag-name{font-size:7.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.ag-verdict{font-size:10.5px;font-weight:700;margin-top:2px}
+.ag-conf{font-size:9px;color:var(--muted);margin-top:1px}
+.bullish{color:var(--up)}.bearish{color:var(--dn)}.neutral{color:var(--ink2)}
 
-/* tags */
-.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;
-     border-radius:4px;letter-spacing:.4px}
-.tag-long   {color:var(--acc); background:#13233a;border:1px solid #1e3a5c}
-.tag-short  {color:var(--warn);background:#332608;border:1px solid #4d3a0d}
-.tag-profit {color:var(--up);  background:#0d2617;border:1px solid #1d3b27}
-.tag-loss   {color:var(--dn);  background:#2e1212;border:1px solid #46211f}
-.tag-neutral{color:var(--dim); background:var(--card2);border:1px solid var(--line)}
-.tag-strat  {color:var(--dim); background:var(--card2);border:1px solid var(--line);font-size:9px}
+/* exits */
+.exit-card{padding:10px 12px;margin-bottom:7px;display:flex;align-items:center;
+           justify-content:space-between;gap:8px}
+.exit-coin{font-size:14px;font-weight:750}
+.exit-ts{color:var(--muted);font-size:10.5px}
 
-/* exit cards */
-.exit-card{background:var(--card);border:1px solid var(--line);
-           border-radius:10px;padding:10px 12px;margin-bottom:7px}
-.exit-top{display:flex;align-items:center;justify-content:space-between}
-.exit-coin{font-size:15px;font-weight:700}
-.exit-ts{color:var(--dim);font-size:10.5px;margin-top:3px}
-
-/* near miss — collapsible */
-.nm-card{background:var(--card);border:1px solid var(--line);
-         border-radius:10px;margin-bottom:7px;overflow:hidden}
+/* near miss */
+.nm-card{margin-bottom:7px;overflow:hidden}
 .nm-head{display:flex;align-items:center;justify-content:space-between;
          padding:10px 12px;cursor:pointer;gap:8px}
-.nm-head:active{opacity:.7}
-.nm-left{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
-.nm-coin{font-size:14px;font-weight:700;flex-shrink:0}
-.nm-count{font-size:9px;color:var(--dim);background:var(--card2);
-          border:1px solid var(--line);border-radius:10px;padding:1px 5px;flex-shrink:0}
-.nm-why{font-size:10.5px;color:var(--dim);
-        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nm-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.nm-head:active{opacity:.75}
+.nm-left{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.nm-coin{font-size:13.5px;font-weight:750;flex-shrink:0}
+.nm-why{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nm-body{padding:0 12px;max-height:0;overflow:hidden;transition:max-height .25s}
-.nm-body.open{max-height:320px;padding-bottom:10px}
-.chevron{color:var(--dim);font-size:12px;transition:transform .2s}
-.chevron.open{transform:rotate(180deg)}
+.nm-body.open{max-height:340px;padding-bottom:12px}
+.chev{color:var(--muted);font-size:12px;transition:transform .2s;flex-shrink:0}
+.chev.open{transform:rotate(180deg)}
 
-/* position cards */
-.pos-card{background:var(--card);border:1px solid var(--line);
-          border-radius:10px;padding:10px 12px;margin-bottom:7px}
-.pos-top{display:flex;align-items:center;justify-content:space-between}
-.pos-meta{color:var(--dim);font-size:11px;margin-top:4px;
-          display:flex;justify-content:space-between}
+/* open positions */
+.pos-card{padding:11px 12px;margin-bottom:7px}
+.pos-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pos-meta{color:var(--muted);font-size:11px;margin-top:5px;display:flex;
+          justify-content:space-between;font-variant-numeric:tabular-nums}
 .pos-age{color:var(--warn);font-size:10px;margin-top:3px}
-.pbar-bg{height:3px;background:var(--line);border-radius:2px;margin-top:7px}
-.pbar{height:3px;border-radius:2px}
+.pos-card .meter{margin-top:8px}
 
 /* stand-down bars */
-.sd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.sd-coin{font-size:12px;font-weight:600;min-width:40px}
-.sd-bar-bg{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
-.sd-bar{height:6px;background:var(--acc);border-radius:3px;opacity:.55}
-.sd-count{font-size:11px;color:var(--dim);min-width:22px;text-align:right}
+.sd-row{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.sd-row:last-child{margin-bottom:0}
+.sd-coin{font-size:12px;font-weight:650;min-width:42px}
+.sd-track{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.sd-track>i{display:block;height:100%;background:var(--acc);opacity:.6;border-radius:3px}
+.sd-count{font-size:11px;color:var(--muted);min-width:26px;text-align:right;
+          font-variant-numeric:tabular-nums}
 
-.empty{color:var(--dim);font-size:13px;text-align:center;padding:24px 0}
-#loader{display:flex;flex-direction:column;align-items:center;
-        justify-content:center;min-height:60vh;gap:12px;color:var(--dim)}
-.spinner{width:28px;height:28px;border:2px solid var(--line);
-         border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite}
+.empty{color:var(--muted);font-size:12.5px;text-align:center;padding:20px 0}
+#loader{display:flex;flex-direction:column;align-items:center;justify-content:center;
+        min-height:60vh;gap:12px;color:var(--muted)}
+.spin{width:26px;height:26px;border:2px solid var(--line);border-top-color:var(--acc);
+      border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <a class="back" href="/">← Live</a>
+<header class="topbar">
+  <a class="navlink" href="/">← Live</a>
   <div class="date-nav">
-    <button id="btn-prev">‹</button>
+    <button class="btn" id="btn-prev">‹</button>
     <span id="date-label">—</span>
-    <button id="btn-next">›</button>
+    <button class="btn" id="btn-next">›</button>
   </div>
-  <button class="today-btn" id="btn-today">Today</button>
-</div>
+  <button class="navlink here" id="btn-today" style="cursor:pointer;background:var(--acc-wash);color:var(--acc);border-color:var(--acc-line)">Today</button>
+</header>
 
-<div id="loader"><div class="spinner"></div><span>Loading report…</span></div>
-<div id="app" style="display:none" class="body"></div>
+<div id="loader"><div class="spin"></div><span>Loading report…</span></div>
+<main id="app" style="display:none"></main>
 
+<script src="/assets/app.js"></script>
 <script>
-const $ = id => document.getElementById(id);
+const {esc,api,fmtPrice}=MS;
+const $=id=>document.getElementById(id);
+const ANALYST_LABELS={technical:'Charts',volume:'Volume',order_book:'Order Book',
+                      on_chain:'On-Chain',sentiment:'Sentiment'};
+let currentDate=new Date().toISOString().slice(0,10);
 
-const ANALYST_LABELS = {
-  technical:'Charts', volume:'Volume', order_book:'Order Book',
-  on_chain:'On-Chain', sentiment:'Sentiment',
-};
-
-let currentDate = new Date().toISOString().slice(0,10);
-
-function fmtDate(d){
-  return new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',
-    {weekday:'short',day:'numeric',month:'short',year:'numeric'});
-}
-function fmtTS(iso){
-  if(!iso) return '';
-  const d = new Date(iso);
+const fmtDate=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-GB',
+  {weekday:'short',day:'numeric',month:'short',year:'numeric'});
+const fmtTS=iso=>{if(!iso)return'';const d=new Date(iso);
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})
-       + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-}
-function fmtUSD(n){
-  if(n==null) return '—';
-  return '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-}
-function fmtAge(unixTs){
-  if(!unixTs) return '';
-  const s = Date.now()/1000 - unixTs;
-  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
-  return h>0 ? `opened ${h}h ${m}m ago` : `opened ${m}m ago`;
-}
+    +' at '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});};
+const fmtUSD=n=>n==null?'—':'$'+Math.abs(n).toLocaleString('en-US',
+  {minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtAge=ts=>{if(!ts)return'';const s=Date.now()/1000-ts;
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+  return h>0?`opened ${h}h ${m}m ago`:`opened ${m}m ago`;};
 
 async function load(date){
-  $('loader').style.display='flex';
-  $('app').style.display='none';
+  $('loader').style.display='flex';$('app').style.display='none';
   $('date-label').textContent=fmtDate(date);
   let data;
-  try{ data = await fetch(`/api/daily_report?date=${date}`).then(r=>r.json()); }
-  catch(e){ $('loader').innerHTML='<span style="color:var(--dn)">Failed to load report</span>'; return; }
+  try{data=await(await api(`/api/daily_report?date=${date}`)).json();}
+  catch(e){$('loader').innerHTML='<span class="dn">Failed to load report</span>';return;}
   currentDate=date;
-  $('loader').style.display='none';
-  $('app').style.display='block';
+  $('loader').style.display='none';$('app').style.display='block';
   $('app').innerHTML=render(data);
 }
 
 function render(d){
-  return `
-    ${renderSummary(d)}
-    <div class="sep"></div>
+  return`${renderSummary(d)}
     ${renderEntries(d.entries)}
-    <div class="sep"></div>
     ${renderExits(d.exits)}
-    <div class="sep"></div>
     ${renderNearMisses(d.near_misses)}
-    <div class="sep"></div>
     ${renderOpenPositions(d.open_positions)}
-    <div class="sep"></div>
-    ${renderStandDowns(d.stand_down_by_coin, d.stand_down_total)}
-  `;
+    ${renderStandDowns(d.stand_down_by_coin,d.stand_down_total)}`;
 }
 
-// ── Summary ───────────────────────────────────────────────────────────────────
 function renderSummary(d){
-  const pos  = d.equity_delta!=null && d.equity_delta>=0;
-  const col  = d.equity_delta==null?'var(--dim)':pos?'var(--up)':'var(--dn)';
-  const sign = d.equity_delta==null?'':pos?'+':'-';
-  const pct  = d.equity_delta_pct!=null ? Math.abs(d.equity_delta_pct)+'%' : '—';
-
-  // Realized P&L row
-  let pnlRow = '';
-  if(d.realized_usd !== undefined){
-    const rPos  = d.realized_usd >= 0;
-    const rCol  = rPos ? 'var(--up)' : 'var(--dn)';
-    const rSign = rPos ? '+' : '-';
-    const wl    = d.wins_today || d.losses_today
-      ? ` (${d.wins_today} win${d.wins_today!==1?'s':''}, ${d.losses_today} loss${d.losses_today!==1?'es':''})`
-      : '';
-    pnlRow = `
-    <div class="pnl-row">
-      <span class="pnl-label">Realized P&amp;L from closed trades${wl}</span>
-      <span class="pnl-val" style="color:${rCol}">${rSign}${fmtUSD(d.realized_usd)}</span>
-    </div>`;
+  const pos=d.equity_delta!=null&&d.equity_delta>=0;
+  const cls=d.equity_delta==null?'dim':pos?'up':'dn';
+  const sign=d.equity_delta==null?'':pos?'+':'−';
+  const pct=d.equity_delta_pct!=null?Math.abs(d.equity_delta_pct)+'%':'—';
+  let pnlRow='';
+  if(d.realized_usd!==undefined){
+    const rPos=d.realized_usd>=0;
+    const wl=d.wins_today||d.losses_today
+      ?` (${d.wins_today} win${d.wins_today!==1?'s':''}, ${d.losses_today} loss${d.losses_today!==1?'es':''})`:'';
+    pnlRow=`<div class="well pnl-row">
+      <span class="pnl-lab">Realized P&amp;L from closed trades${wl}</span>
+      <span class="pnl-val ${rPos?'up':'dn'}">${rPos?'+':'−'}${fmtUSD(d.realized_usd)}</span></div>`;
   }
-
-  return `
-  <div class="hero-card">
+  return`<div class="card pad">
     <div class="hero-top">
       <div>
-        <div class="lab" style="margin-bottom:3px">Account change today</div>
-        <div>
-          <span class="eq-num" style="color:${col}">${sign}${fmtUSD(d.equity_delta)}</span>
-          <span class="eq-pct" style="color:${col}">${sign}${pct}</span>
-        </div>
-        <div class="eq-sub">${d.equity_start!=null
-          ? fmtUSD(d.equity_start)+' at start → '+fmtUSD(d.equity_end)+' now'
-          : 'No equity data for this day'}</div>
+        <span class="lab" style="margin:0 0 5px">Account change today</span>
+        <div><span class="hero-num ${cls}">${sign}${fmtUSD(d.equity_delta)}</span>
+             <span class="hero-pct ${cls}">${sign}${pct}</span></div>
+        <div class="hero-sub">${d.equity_start!=null
+          ?fmtUSD(d.equity_start)+' at start → '+fmtUSD(d.equity_end)+' now'
+          :'No equity data for this day'}</div>
       </div>
-      <span class="regime-pill">${d.regime||'—'} market</span>
+      <span class="regime ${MS.regimeCls(d.regime)}">${esc(d.regime||'—')} market</span>
     </div>
     ${pnlRow}
-    <div class="stat-row">
-      <div class="sbox"><div class="sval" style="color:var(--acc)">${d.entries.length}</div><div class="slab">Opened</div></div>
-      <div class="sbox"><div class="sval" style="color:var(--dim)">${d.exits.length}</div><div class="slab">Closed</div></div>
-      <div class="sbox"><div class="sval" style="color:var(--warn)">${d.near_misses.length}</div><div class="slab">Considered</div></div>
-      <div class="sbox"><div class="sval">${d.stand_down_total}</div><div class="slab">Skipped</div></div>
+    <div class="tiles hero-tiles">
+      <div class="tile"><div class="t-lab">Opened</div><div class="t-val" style="color:var(--acc)">${d.entries.length}</div></div>
+      <div class="tile"><div class="t-lab">Closed</div><div class="t-val">${d.exits.length}</div></div>
+      <div class="tile"><div class="t-lab">Considered</div><div class="t-val" style="color:var(--warn)">${d.near_misses.length}</div></div>
+      <div class="tile"><div class="t-lab">Skipped</div><div class="t-val dim">${d.stand_down_total}</div></div>
     </div>
   </div>`;
 }
 
-// ── Entries ───────────────────────────────────────────────────────────────────
-function renderEntries(entries){
-  const cards = !entries.length
-    ? '<div class="empty">No positions were opened today</div>'
-    : entries.map(e => {
-        const isShort = e.action==='ENTRY_SELL';
-        const cls     = isShort?'short':'long';
-        const tagCls  = isShort?'tag-short':'tag-long';
-        const tagLbl  = isShort?'Went Short':'Went Long';
-        const barCol  = isShort?'var(--warn)':'var(--acc)';
-        const conf    = Math.round((e.confidence||0)*100);
-        const strat   = parseStrategy(e.reasoning||'');
-        return `
-        <div class="entry-card ${cls}">
-          <div class="card-head">
-            <div>
-              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-                <span class="coin-name">${e.coin}</span>
-                <span class="tag ${tagCls}">${tagLbl}</span>
-                ${strat ? `<span class="tag tag-strat">${strat}</span>` : ''}
-              </div>
-              <div class="ts">${fmtTS(e.timestamp)}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:13px;font-weight:700">${conf}% confident</div>
-            </div>
-          </div>
-          <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barCol}"></div></div>
-          ${renderAnalysts(e.analysts||[])}
-          <div class="reasoning">${parseReasoning(e.reasoning||'')}</div>
-        </div>`;
-      }).join('');
-  return `<div class="lab">Positions Opened</div>${cards}`;
-}
-
-function parseStrategy(r){
-  const m = r.match(/strategy=([^\s;]+)/);
-  return (m && m[1] && m[1]!=='none') ? m[1] : '';
-}
+const parseStrategy=r=>{const m=r.match(/strategy=([^\s;]+)/);
+  return(m&&m[1]&&m[1]!=='none')?m[1]:'';};
 
 function renderAnalysts(analysts){
-  if(!analysts.length) return '';
-  return `<div class="analyst-grid">${analysts.map(a=>{
-    const label = ANALYST_LABELS[a.a]||a.a;
-    const v = a.v||'neutral';
-    const c = Math.round((a.c||0)*100);
-    return `<div class="av">
-      <div class="av-name">${label}</div>
-      <div class="av-verdict ${v}">${v==='bullish'?'Bullish':v==='bearish'?'Bearish':'Neutral'}</div>
-      <div class="av-conf">${c}% sure</div>
-    </div>`;
-  }).join('')}</div>`;
+  if(!analysts.length)return'';
+  return`<div class="analyst-grid">${analysts.map(a=>{
+    const v=a.v||'neutral',c=Math.round((a.c||0)*100);
+    return`<div class="ag"><div class="ag-name">${ANALYST_LABELS[a.a]||a.a}</div>
+      <div class="ag-verdict ${v}">${v==='bullish'?'Bullish':v==='bearish'?'Bearish':'Neutral'}</div>
+      <div class="ag-conf">${c}% sure</div></div>`;}).join('')}</div>`;
 }
 
 function parseReasoning(r){
-  const parts = [];
-  const regime   = r.match(/regime=([^\s;(]+)/);
-  const score    = r.match(/blended_score=([^\s;]+)/);
-  const ceo      = r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
-  const agree    = r.match(/agree=(True|False)/);
-
-  if(regime){ const rm=regime[1].replace('_',' '); parts.push(`<b>Market:</b> ${rm.charAt(0).toUpperCase()+rm.slice(1)}`); }
-  if(score){
-    const s=parseFloat(score[1]);
-    const dir=s>0.1?'bullish lean':s<-0.1?'bearish lean':'neutral';
-    parts.push(`<b>Overall signal:</b> ${score[1]} (${dir})`);
-  }
-  if(ceo){
-    const dir=ceo[1], conf=Math.round(parseFloat(ceo[2])*100);
-    parts.push(`<b>System decision:</b> ${dir.charAt(0).toUpperCase()+dir.slice(1)} (${conf}% confident)`);
-  }
-  if(agree) parts.push(`<b>Analysts:</b> ${agree[1]==='True'?'were in agreement':'were split'}`);
-  return parts.length ? parts.join('&ensp;·&ensp;') : r;
+  const parts=[];
+  const regime=r.match(/regime=([^\s;(]+)/);
+  const score=r.match(/blended_score=([^\s;]+)/);
+  const ceo=r.match(/ceo=([^\s;(]+)\(([^)]+)\)/);
+  const agree=r.match(/agree=(True|False)/);
+  if(regime){const rm=regime[1].replace('_',' ');
+    parts.push(`<b>Market:</b> ${rm.charAt(0).toUpperCase()+rm.slice(1)}`);}
+  if(score){const s=parseFloat(score[1]);
+    parts.push(`<b>Overall signal:</b> ${score[1]} (${s>0.1?'bullish lean':s<-0.1?'bearish lean':'neutral'})`);}
+  if(ceo){parts.push(`<b>System decision:</b> ${ceo[1].charAt(0).toUpperCase()+ceo[1].slice(1)} (${Math.round(parseFloat(ceo[2])*100)}% confident)`);}
+  if(agree)parts.push(`<b>Analysts:</b> ${agree[1]==='True'?'were in agreement':'were split'}`);
+  return parts.length?parts.join('&ensp;·&ensp;'):esc(r);
 }
 
-// ── Exits ─────────────────────────────────────────────────────────────────────
-function renderExits(exits){
-  const cards = !exits.length
-    ? '<div class="empty">No positions were closed today</div>'
-    : exits.map(e=>{
-        const oc = e.outcome==='profit'?'tag-profit':e.outcome==='loss'?'tag-loss':'tag-neutral';
-        return `
-        <div class="exit-card">
-          <div class="exit-top">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="exit-coin">${e.coin}</span>
-              <span class="tag ${oc}">${e.label}</span>
+function renderEntries(entries){
+  const cards=!entries.length
+    ?'<div class="empty">No positions were opened today</div>'
+    :entries.map(e=>{
+      const isShort=e.action==='ENTRY_SELL';
+      const conf=Math.round((e.confidence||0)*100);
+      const strat=parseStrategy(e.reasoning||'');
+      return`<div class="card entry-card ${isShort?'short':''}">
+        <div class="card-head">
+          <div>
+            <div class="coin-line">
+              <span class="coin-name">${esc(e.coin)}</span>
+              <span class="tag ${isShort?'SHORT':'LONG'}">${isShort?'Went short':'Went long'}</span>
+              ${strat?`<span class="tag plain">${esc(strat)}</span>`:''}
             </div>
+            <div class="ts">${fmtTS(e.timestamp)}</div>
           </div>
-          <div class="exit-ts">${fmtTS(e.timestamp)}</div>
-        </div>`;
-      }).join('');
-  return `<div class="lab">Positions Closed</div>${cards}`;
+          <span class="conf">${conf}% confident</span>
+        </div>
+        <div class="meter"><i class="${isShort?'sell':'buy'}" style="width:${conf}%"></i></div>
+        ${renderAnalysts(e.analysts||[])}
+        <div class="well reasoning">${parseReasoning(e.reasoning||'')}</div>
+      </div>`;}).join('');
+  return`<span class="lab">Positions opened</span>${cards}`;
 }
 
-// ── Near Misses ───────────────────────────────────────────────────────────────
+function renderExits(exits){
+  const cards=!exits.length
+    ?'<div class="empty">No positions were closed today</div>'
+    :exits.map(e=>{
+      const oc=e.outcome==='profit'?'profit':e.outcome==='loss'?'loss':'plain';
+      return`<div class="card exit-card">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span class="exit-coin">${esc(e.coin)}</span>
+          <span class="tag ${oc}">${esc(e.label)}</span>
+        </div>
+        <span class="exit-ts">${fmtTS(e.timestamp)}</span>
+      </div>`;}).join('');
+  return`<span class="lab">Positions closed</span>${cards}`;
+}
+
 function renderNearMisses(nms){
-  if(!nms.length){
-    return `<div class="lab">Signals Considered But Not Taken</div>
-            <div class="empty">All other signals were low confidence</div>`;
-  }
-  const cards = nms.map((d,i)=>{
-    const conf = Math.round((d.confidence||0)*100);
-    const why  = shortReason(d.reasoning||'');
-    const strat = parseStrategy(d.reasoning||'');
-    return `
-    <div class="nm-card">
+  if(!nms.length)
+    return`<span class="lab">Signals considered but not taken</span>
+           <div class="empty">All other signals were low confidence</div>`;
+  const cards=nms.map((d,i)=>{
+    const conf=Math.round((d.confidence||0)*100);
+    const strat=parseStrategy(d.reasoning||'');
+    return`<div class="card nm-card">
       <div class="nm-head" onclick="toggleNM(${i})">
         <div class="nm-left">
-          <span class="nm-coin">${d.coin}</span>
-          ${d.nm_count>1 ? `<span class="nm-count">×${d.nm_count}</span>` : ''}
-          <span class="nm-why">${why}</span>
+          <span class="nm-coin">${esc(d.coin)}</span>
+          ${d.nm_count>1?`<span class="tag plain">×${d.nm_count}</span>`:''}
+          <span class="nm-why">${shortReason(d.reasoning||'')}</span>
         </div>
-        <div class="nm-right">
-          <span style="font-size:12px;color:var(--warn)">${conf}%</span>
-          <span class="chevron" id="chev-${i}">▾</span>
+        <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+          <span class="warn num" style="font-size:12px;font-weight:700">${conf}%</span>
+          <span class="chev" id="chev-${i}">▾</span>
         </div>
       </div>
       <div class="nm-body" id="nm-body-${i}">
-        <div class="ts" style="margin-bottom:6px">${fmtTS(d.timestamp)}${strat?' · '+strat:''}</div>
+        <div class="ts" style="margin-bottom:7px">${fmtTS(d.timestamp)}${strat?' · '+esc(strat):''}</div>
         ${renderAnalysts(d.analysts||[])}
-        <div class="reasoning" style="margin-top:7px">${parseReasoning(d.reasoning||'')}</div>
+        <div class="well reasoning">${parseReasoning(d.reasoning||'')}</div>
       </div>
-    </div>`;
-  }).join('');
-  return `<div class="lab">Signals Considered But Not Taken <span style="font-size:9px;font-weight:400">(confidence ≥ 45%, one per coin)</span></div>${cards}`;
+    </div>`;}).join('');
+  return`<span class="lab">Signals considered but not taken <small>(confidence ≥ 45%, one per coin)</small></span>${cards}`;
 }
-
 function shortReason(r){
-  const ceo   = r.match(/ceo=([^\s;(]+)/);
-  const agree = r.match(/agree=(True|False)/);
-  if(!ceo) return 'Signal too weak to enter';
-  const dir   = ceo[1];
-  const split = agree&&agree[1]==='False' ? ', analysts split' : '';
-  return `System was ${dir}${split} — not confident enough to trade`;
+  const ceo=r.match(/ceo=([^\s;(]+)/);
+  const agree=r.match(/agree=(True|False)/);
+  if(!ceo)return'Signal too weak to enter';
+  return`System was ${ceo[1]}${agree&&agree[1]==='False'?', analysts split':''} — not confident enough`;
 }
-
 function toggleNM(i){
   document.getElementById('nm-body-'+i).classList.toggle('open');
   document.getElementById('chev-'+i).classList.toggle('open');
 }
 
-// ── Open Positions ────────────────────────────────────────────────────────────
 function renderOpenPositions(positions){
   if(!positions||!positions.length)
-    return `<div class="lab">Currently Open (live)</div><div class="empty">No open positions right now</div>`;
-  const cards = positions.map(p=>{
-    const pnl  = p.unrealised_pnl_pct||0;
-    const col  = pnl>=0?'var(--up)':'var(--dn)';
-    const side = p.side==='SHORT'?'tag-short':'tag-long';
-    const barW = Math.min(Math.abs(pnl)*4,100);
-    return `
-    <div class="pos-card">
+    return`<span class="lab">Currently open (live)</span><div class="empty">No open positions right now</div>`;
+  const cards=positions.map(p=>{
+    const pnl=p.unrealised_pnl_pct||0,c=pnl>=0?'up':'dn';
+    return`<div class="card pos-card">
       <div class="pos-top">
-        <div style="display:flex;align-items:center;gap:7px">
-          <span style="font-size:15px;font-weight:700">${p.coin}</span>
-          <span class="tag ${side}">${p.side==='SHORT'?'Short':'Long'}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px;font-weight:750">${esc(p.coin)}</span>
+          <span class="tag ${p.side==='SHORT'?'SHORT':'LONG'}">${p.side==='SHORT'?'Short':'Long'}</span>
+          ${p.strat_name?`<span class="tag plain">${esc(p.strat_name)}</span>`:''}
         </div>
-        <span style="font-size:15px;font-weight:700;color:${col}">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span>
+        <span class="num ${c}" style="font-size:14px;font-weight:750">${pnl>=0?'+':''}${pnl.toFixed(2)}%</span>
       </div>
       <div class="pos-meta">
-        <span>Entered at $${p.entry_price!=null?p.entry_price.toLocaleString():'—'}</span>
-        <span>Now $${p.current_price!=null?p.current_price.toLocaleString():'—'}</span>
+        <span>Entered ${fmtPrice(p.entry_price)}</span>
+        <span>Now ${fmtPrice(p.current_price)}</span>
       </div>
       <div class="pos-age">${fmtAge(p.opened_at)}</div>
-      <div class="pbar-bg"><div class="pbar" style="width:${barW}%;background:${col}"></div></div>
-    </div>`;
-  }).join('');
-  return `<div class="lab">Currently Open (live)</div>${cards}`;
+      <div class="meter"><i class="${c==='up'?'buy':'sell'}" style="width:${Math.min(Math.abs(pnl)*4,100)}%"></i></div>
+    </div>`;}).join('');
+  return`<span class="lab">Currently open (live)</span>${cards}`;
 }
 
-// ── Stand-Down Chart ──────────────────────────────────────────────────────────
-function renderStandDowns(byCoins, total){
+function renderStandDowns(byCoins,total){
   if(!byCoins||!Object.keys(byCoins).length)
-    return `<div class="lab">Coins Reviewed But Skipped</div><div class="empty">No data</div>`;
-  const max  = Math.max(...Object.values(byCoins));
-  const rows = Object.entries(byCoins).map(([coin,n])=>`
+    return`<span class="lab">Coins reviewed but skipped</span><div class="empty">No data</div>`;
+  const max=Math.max(...Object.values(byCoins));
+  const rows=Object.entries(byCoins).map(([coin,n])=>`
     <div class="sd-row">
-      <span class="sd-coin">${coin}</span>
-      <div class="sd-bar-bg"><div class="sd-bar" style="width:${Math.round(n/max*100)}%"></div></div>
+      <span class="sd-coin">${esc(coin)}</span>
+      <div class="sd-track"><i style="width:${Math.round(n/max*100)}%"></i></div>
       <span class="sd-count">${n}×</span>
     </div>`).join('');
-  return `
-  <div class="lab">Coins Reviewed But Skipped <span style="font-size:9px;font-weight:400">(${total} total checks)</span></div>
-  <div class="card">${rows}</div>`;
+  return`<span class="lab">Coins reviewed but skipped <small>(${total} total checks)</small></span>
+         <div class="card pad">${rows}</div>`;
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
-function offsetDate(date,days){
-  const d=new Date(date+'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate()+days);
-  return d.toISOString().slice(0,10);
-}
-$('btn-prev').onclick  = ()=>load(offsetDate(currentDate,-1));
-$('btn-next').onclick  = ()=>load(offsetDate(currentDate,+1));
-$('btn-today').onclick = ()=>load(new Date().toISOString().slice(0,10));
+const offsetDate=(date,days)=>{const d=new Date(date+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);};
+$('btn-prev').onclick=()=>load(offsetDate(currentDate,-1));
+$('btn-next').onclick=()=>load(offsetDate(currentDate,+1));
+$('btn-today').onclick=()=>load(new Date().toISOString().slice(0,10));
 
-const urlDate = new URLSearchParams(location.search).get('date');
+const urlDate=new URLSearchParams(location.search).get('date');
 load(urlDate||new Date().toISOString().slice(0,10));
 </script>
 </body>
