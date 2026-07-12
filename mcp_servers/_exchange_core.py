@@ -155,23 +155,44 @@ def _mark(coin):
 
 
 # ---------- order placement ----------
+def _exec_price(coin, side):
+    """Mark price adjusted for simulated slippage: takers buying pay up,
+    takers selling hit the bid."""
+    px = _mark(coin)
+    slip = getattr(config, "PAPER_SLIPPAGE_BPS", 0.0) / 10000.0
+    if side in ("BUY", "COVER"):      # buying base / buying back a short
+        return px * (1 + slip)
+    return px * (1 - slip)            # SELL / SHORT
+
+
+def _fee(notional):
+    """Simulated taker fee on a fill's notional value."""
+    return abs(notional) * getattr(config, "PAPER_FEE_PCT", 0.0)
+
+
 def place_order(coin, side, quantity, client_order_id=None):
     """Place an order. Idempotent on client_order_id.
-    Paper mode fills against the current mark price under the wallet lock."""
+    Paper mode fills against a fresh mark price with simulated fee and
+    slippage, under the wallet lock."""
     if config.MODE in ("testnet", "live"):
         return _ccxt_order(coin, side, quantity, client_order_id)
+    return _paper_fill(coin, side, quantity, client_order_id)
 
+
+def _paper_fill(coin, side, quantity, client_order_id=None):
     coid = client_order_id or str(uuid.uuid4())
-    price = _mark(coin)
+    price = _exec_price(coin, side)
     with _wallet_lock():
         w = _load()
         if any(f["client_order_id"] == coid for f in w["fills"]):
             return {"status": "duplicate_ignored", "client_order_id": coid}
         notional = price * quantity
+        fee = 0.0
         if side == "BUY":
-            if notional > w["cash_usd"]:
+            fee = _fee(notional)
+            if notional + fee > w["cash_usd"]:
                 return {"status": "rejected", "reason": "insufficient cash"}
-            w["cash_usd"] -= notional
+            w["cash_usd"] -= notional + fee
             pos = w["positions"].get(coin)
             if pos:
                 tot = pos["quantity"] + quantity
@@ -188,7 +209,8 @@ def place_order(coin, side, quantity, client_order_id=None):
             if not pos:
                 return {"status": "rejected", "reason": "no position to sell"}
             sell_qty = min(quantity, pos["quantity"])   # never sell more than held
-            w["cash_usd"] += price * sell_qty
+            fee = _fee(price * sell_qty)
+            w["cash_usd"] += price * sell_qty - fee
             pos["quantity"] -= sell_qty
             quantity = sell_qty
             if pos["quantity"] <= 1e-9:
@@ -196,12 +218,12 @@ def place_order(coin, side, quantity, client_order_id=None):
                 _clear_meta(coin)
 
         elif side == "SHORT":  # synthetic short: reserve collateral from cash
-            notional = price * quantity
-            if notional > w["cash_usd"]:
+            fee = _fee(notional)
+            if notional + fee > w["cash_usd"]:
                 return {"status": "rejected", "reason": "insufficient cash for short collateral"}
             if coin in w.get("shorts", {}):
                 return {"status": "rejected", "reason": f"already short {coin}"}
-            w["cash_usd"] -= notional
+            w["cash_usd"] -= notional + fee
             w.setdefault("shorts", {})[coin] = {
                 "quantity": quantity, "entry_price": price,
                 "opened_at": time.time(), "collateral": notional,
@@ -219,7 +241,8 @@ def place_order(coin, side, quantity, client_order_id=None):
             frac = cover_qty / short_pos["quantity"]
             pnl = (short_pos["entry_price"] - price) * cover_qty
             collateral_return = short_pos["collateral"] * frac
-            w["cash_usd"] += collateral_return + pnl
+            fee = _fee(price * cover_qty)
+            w["cash_usd"] += collateral_return + pnl - fee
             w["realized_short_pnl"] = w.get("realized_short_pnl", 0.0) + pnl
             short_pos["quantity"] -= cover_qty
             short_pos["collateral"] -= collateral_return
@@ -228,7 +251,8 @@ def place_order(coin, side, quantity, client_order_id=None):
                 del shorts[coin]
                 _clear_meta(coin)
         fill = {"client_order_id": coid, "coin": coin, "side": side,
-                "quantity": round(quantity, 8), "price": price, "ts": time.time()}
+                "quantity": round(quantity, 8), "price": price,
+                "fee_usd": round(fee, 6), "ts": time.time()}
         w["fills"].append(fill)
         _save(w)
     return {"status": "filled", **fill}
@@ -461,46 +485,10 @@ def _ccxt_futures_order(coin, side, quantity, coid):
 
 
 def _paper_short_order(coin, side, quantity, coid):
-    """Synthetic short simulation used when futures credentials are absent."""
-    price = _mark(coin)
-    coid  = coid or str(uuid.uuid4())
-    with _wallet_lock():
-        w = _load()
-        if any(f["client_order_id"] == coid for f in w["fills"]):
-            return {"status": "duplicate_ignored", "client_order_id": coid}
-        if side == "SHORT":
-            notional = price * quantity
-            if notional > w["cash_usd"]:
-                return {"status": "rejected", "reason": "insufficient cash for short collateral"}
-            if coin in w.get("shorts", {}):
-                return {"status": "rejected", "reason": f"already short {coin}"}
-            w["cash_usd"] -= notional
-            w.setdefault("shorts", {})[coin] = {
-                "quantity": quantity, "entry_price": price,
-                "opened_at": time.time(), "collateral": notional,
-            }
-            m = _load_meta()
-            m[coin] = {"peak_pnl": 0.0, "targets_taken": []}
-            atomic_write_json(_META, m)
-        else:  # COVER
-            shorts = w.get("shorts", {})
-            sp = shorts.get(coin)
-            if not sp:
-                return {"status": "rejected", "reason": f"no short to cover on {coin}"}
-            cover_qty = min(quantity, sp["quantity"])
-            frac = cover_qty / sp["quantity"]
-            w["cash_usd"] += sp["collateral"] * frac + (sp["entry_price"] - price) * cover_qty
-            sp["quantity"]   -= cover_qty
-            sp["collateral"] -= sp["collateral"] * frac
-            quantity = cover_qty
-            if sp["quantity"] <= 1e-9:
-                del shorts[coin]
-                _clear_meta(coin)
-        fill = {"client_order_id": coid, "coin": coin, "side": side,
-                "quantity": round(quantity, 8), "price": price, "ts": time.time()}
-        w["fills"].append(fill)
-        _save(w)
-    return {"status": "filled", **fill}
+    """Synthetic short simulation used when futures credentials are absent.
+    Delegates to the shared paper-fill logic (was a near-verbatim copy that
+    had already drifted — no realized_short_pnl tracking, no fees)."""
+    return _paper_fill(coin, side, quantity, coid)
 
 
 def _record_fill(coid, coin, side, quantity, price):

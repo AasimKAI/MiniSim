@@ -68,6 +68,12 @@ TRAILING_STOP_PERCENT = 3.0
 MAX_HOLD_TIME_HOURS = 48
 MIN_ORDER_NOTIONAL_USD = 6.0          # Binance spot min is $5; 6 gives a small buffer
 
+# Paper-trading realism: simulated taker fee and slippage on every paper fill.
+# Binance spot taker fee is 0.10% (0.075% with BNB discount). Without these the
+# simulator reports frictionless P&L that live trading cannot reproduce.
+PAPER_FEE_PCT = 0.001            # 0.1% of notional per fill
+PAPER_SLIPPAGE_BPS = 2.0         # 2 bps adverse price move per market order
+
 # Futures shorts (USDM perpetual, testnet.binancefuture.com)
 FUTURES_LEVERAGE    = 1            # 1x = no leverage; increase only deliberately
 FUTURES_MARGIN_TYPE = "ISOLATED"   # ISOLATED is safer than CROSS for automated trading
