@@ -81,6 +81,16 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
     taker_ratio  = mcp.taker_ratio(coin)
     price        = ticker["price"]
 
+    # Never trade on synthetic fallback data outside fixture mode. The source
+    # is labelled on the dashboard, but labelling alone doesn't stop entries.
+    src = str(ticker.get("source", "unknown"))
+    if config.MODE != "fixture" and src.startswith("synthetic"):
+        decision = {"coin": coin, "action": "STAND_DOWN", "confidence": 0.0,
+                    "direction": "neutral", "regime": "unknown", "strategy": None,
+                    "ceo_backend": None,
+                    "reasoning": f"data_source_veto({src}) — market data is not real"}
+        return decision, price, [], "unknown", candles
+
     verdicts = [
         tech.analyze(coin, candles),
         volume_analyst(coin, candles),

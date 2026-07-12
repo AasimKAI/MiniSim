@@ -12,6 +12,13 @@ from records.performance import coin_context
 
 def sentiment_analyst(coin, mcp):
     heads = mcp.headlines(coin) or []
+    if not heads:
+        # Nothing real to score — abstain rather than hallucinate sentiment
+        # (also saves an LLM inference per coin with no news coverage).
+        return validate_analyst_verdict({
+            "analyst": "sentiment", "coin": coin, "verdict": "neutral",
+            "confidence": 0.0,
+            "reasoning": "no coin-specific headlines — abstaining"})
     perf = coin_context(coin)
     perf_block = f"\n\n{perf}" if perf else ""
     system = ("You are a crypto market sentiment analyst. Read the headlines and "
