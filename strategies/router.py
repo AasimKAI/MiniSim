@@ -221,7 +221,7 @@ Respond with JSON containing:
     }
 
     try:
-        result = chat_json(sysmsg, user, schema=schema)
+        result = chat_json(sysmsg, user, schema_keys=tuple(schema["properties"].keys()))
         # Validate returned names are real
         valid = [n for n in result.get("active_strategies", []) if n in REGISTRY]
         if not valid:
