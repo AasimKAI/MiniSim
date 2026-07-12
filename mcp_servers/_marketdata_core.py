@@ -180,6 +180,40 @@ def get_ticker(coin):
             "ts": last_t, "source": _CACHE.get(coin, {}).get("source", "unknown")}
 
 
+_PX_CACHE: dict = {}   # coin -> (fetched_at, price)
+
+def get_price(coin, max_age_sec=None):
+    """Fresh mark price for exits and paper fills (short TTL, cheap endpoint).
+
+    The candle cache (MARKET_CACHE_SEC, 10 min) is fine for the think-cycle
+    but far too stale for stop-loss checks: a 30s exit loop reading a 10-min
+    price is a 10-min stop. This hits Binance /ticker/price (one tiny call
+    per open position per TTL) and falls back to the candle-cache close."""
+    ttl = max_age_sec if max_age_sec is not None else getattr(
+        config, "MARK_PRICE_MAX_AGE_SEC", 20)
+    now = time.time()
+    cached = _PX_CACHE.get(coin)
+    if cached and now - cached[0] < ttl:
+        return cached[1]
+
+    px = None
+    symbol = _BINANCE_SYMBOLS.get(coin)
+    if symbol and config.MODE in ("paper", "testnet", "live"):
+        try:
+            import httpx
+            r = httpx.get("https://api.binance.com/api/v3/ticker/price",
+                          params={"symbol": symbol}, timeout=5.0)
+            r.raise_for_status()
+            px = float(r.json()["price"])
+        except Exception:
+            px = None
+    if px is None:
+        px = get_ticker(coin)["price"]   # candle-cache fallback (older vintage)
+
+    _PX_CACHE[coin] = (now, px)
+    return px
+
+
 _OB_CACHE: dict = {}   # coin -> (fetched_at, result)
 
 def get_orderbook(coin):

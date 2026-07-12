@@ -148,8 +148,10 @@ def positions():
 
 
 def _mark(coin):
-    from mcp_servers._marketdata_core import get_ticker
-    return get_ticker(coin)["price"]
+    # Fresh short-TTL price — exits and fills must not run on the 10-minute
+    # candle-cache vintage the think-cycle uses.
+    from mcp_servers._marketdata_core import get_price
+    return get_price(coin)
 
 
 # ---------- order placement ----------

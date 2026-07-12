@@ -306,8 +306,9 @@ def run_cycle(mcp):
 
 
 def run_exits(mcp):
-    if kill_switch.is_active():
-        return
+    # Protective exits ALWAYS run — the kill switch blocks new entries only.
+    # Halting stop-loss/TP management would abandon open positions, which is
+    # worse than any state the kill switch is trying to prevent.
     for p in mcp.positions():
         coin  = p["coin"]
         price = p["current_price"]
@@ -319,9 +320,6 @@ def run_exits(mcp):
             pass
         if not should:
             continue
-        if kill_switch.is_active():
-            log.warning("kill switch tripped — aborting exit orders")
-            break
         lvl  = meta.get("target_level")
         qty  = round(p["quantity"] * frac, 6)
         if frac < 1.0 and qty * price < config.MIN_ORDER_NOTIONAL_USD:

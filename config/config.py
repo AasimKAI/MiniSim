@@ -30,6 +30,10 @@ VOLUME_SCAN_INTERVAL = 45
 MARKET_CACHE_SEC = 600
 # Exit watch loop (seconds) — how often open positions are checked for stop-loss/TP.
 EXIT_WATCH_INTERVAL = 30
+# Max age of the mark price used for exits and paper fills (seconds).
+# Separate from MARKET_CACHE_SEC: the think-cycle can run on a 10-minute
+# vintage, but a stop-loss checked every 30s must see a fresh price.
+MARK_PRICE_MAX_AGE_SEC = 20
 # Candle timeframe passed to the Binance klines API.
 # 15m gives cleaner signals and matches the ~22 min analysis cadence.
 CANDLE_INTERVAL = "15m"
