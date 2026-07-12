@@ -29,6 +29,7 @@ from operations import kill_switch, status_writer
 from strategies import REGISTRY
 from strategies.router import (
     get_active_strategies,
+    get_risk_level,
     refresh_if_stale  as router_refresh,
     current_state_summary as router_summary,
 )
@@ -232,7 +233,9 @@ def run_cycle(mcp):
                     tax_ledger.record_trade(
                         coin, "COVER",
                         cover_fill.get("quantity", short["quantity"]),
-                        cover_fill.get("price", price))
+                        cover_fill.get("price", price),
+                        fee_usd=cover_fill.get("fee_usd", 0.0),
+                        strategy=short.get("strat_name"))
                 continue   # long entry on the next cycle once short is cleared
 
             if decision["action"] == "ENTRY_SELL" and has_short:
@@ -248,7 +251,8 @@ def run_cycle(mcp):
                 order_side = "SHORT"   # open synthetic short
 
             qty, verdict, why = risk_manager.check(
-                coin, decision["action"], price, bal, pos)
+                coin, decision["action"], price, bal, pos,
+                risk_mult=get_risk_level())
             if qty <= 0:
                 log.info("  risk veto: %s", why)
                 continue
@@ -266,7 +270,8 @@ def run_cycle(mcp):
             if fill.get("status") == "filled":
                 tax_ledger.record_trade(
                     coin, order_side,
-                    fill.get("quantity", qty), fill.get("price", price))
+                    fill.get("quantity", qty), fill.get("price", price),
+                    fee_usd=fill.get("fee_usd", 0.0), strategy=chosen_strategy)
 
                 # Store strategy exit params on the position so exit_manager can use them
                 if chosen_strategy and order_side in ("BUY", "SHORT"):
@@ -331,8 +336,10 @@ def run_exits(mcp):
         if fill.get("status") == "filled":
             if lvl is not None:
                 mcp.update_meta(coin, add_target=lvl)
-            tax_ledger.record_trade(coin, "SELL",
-                                    fill.get("quantity", qty), fill.get("price", price))
+            tax_ledger.record_trade(coin, exit_side,
+                                    fill.get("quantity", qty), fill.get("price", price),
+                                    fee_usd=fill.get("fee_usd", 0.0),
+                                    strategy=p.get("strat_name"))
         else:
             log.warning("EXIT %s not filled (%s) — will retry next pass",
                         coin, fill.get("status"))
