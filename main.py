@@ -1,5 +1,5 @@
 """
-MiniSim v5 — system orchestrator.
+MiniSim — system orchestrator.
 
 One think-cycle per coin:
   MCP feeds -> analysts -> regime -> strategy signals -> CEO decision -> risk -> execute -> log

@@ -1,5 +1,5 @@
 """
-MiniSim v6 — central configuration.
+MiniSim v7 — central configuration.
 
 Everything you might want to change lives here. Plain-English comments on
 each line so a non-developer can adjust safely.
@@ -159,4 +159,4 @@ POSITIONS_FILE = os.path.join(STATE_DIR, "positions.json")
 STATUS_FILE = os.path.join(STATE_DIR, "status.json")   # dashboards read this
 EQUITY_HISTORY_FILE = os.path.join(STATE_DIR, "equity_history.json")  # for the equity chart
 
-VERSION = "6.0.0"
+VERSION = "7.0.0"
