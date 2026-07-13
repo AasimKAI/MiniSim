@@ -78,6 +78,18 @@ PAPER_SLIPPAGE_BPS = 2.0         # 2 bps adverse price move per market order
 FUTURES_LEVERAGE    = 1            # 1x = no leverage; increase only deliberately
 FUTURES_MARGIN_TYPE = "ISOLATED"   # ISOLATED is safer than CROSS for automated trading
 
+# Which venue executes real SHORT/COVER orders when futures credentials exist.
+#   binance     -> USDM perps (UK retail accounts cannot obtain futures keys)
+#   hyperliquid -> perp DEX via ccxt, USDC-settled, has a public testnet.
+#                  UNVERIFIED against the live venue — run testnet first.
+FUTURES_BACKEND = os.environ.get("MINISIM_FUTURES_BACKEND", "binance")
+
+# Synthetic (paper-wallet) shorts accrue perpetual funding pro-rata against
+# the 8h period, settled to cash like a real perp: positive rate = longs pay
+# shorts (short RECEIVES), negative = short pays. Real futures positions
+# handle funding on the exchange, so this applies to paper shorts only.
+PAPER_FUNDING_ACCRUAL = True
+
 ROUTINE_SIGNAL_CONFIDENCE_MIN = 0.68   # raised from 0.65 — filters borderline entries
 STRONG_SIGNAL_CONFIDENCE_MIN = 0.80
 

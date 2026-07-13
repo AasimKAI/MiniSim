@@ -440,6 +440,36 @@ _ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
 open(_ex7._META, "w").write("{}")
 config.MODE = _sv_mode7
 
+# V7-13: synthetic shorts accrue perp funding (paper realism)
+_sv13 = config.MODE; config.MODE = "fixture"
+_ex7._save({"cash_usd": 9900.0, "positions": {},
+            "shorts": {"DOGE": {"quantity": 100.0, "entry_price": 0.16,
+                                "opened_at": _t7.time() - 8 * 3600,
+                                "collateral": 16.0}},
+            "fills": []})
+_mark13 = _ex7._mark("DOGE")
+_ex7.accrue_funding({"DOGE": 0.0001})     # +ve rate: longs pay shorts → we RECEIVE
+_w13 = _ex7._load()
+_exp13 = 0.0001 * _mark13 * 100.0         # one full 8h period on mark notional
+_got13 = _w13["cash_usd"] - 9900.0
+check("V7-13a positive funding credits a synthetic short",
+      _got13 > 0 and abs(_got13 - _exp13) < _exp13 * 0.05 + 1e-9
+      and _w13["shorts"]["DOGE"]["funding_usd"] > 0)
+_r13b = _ex7.accrue_funding({"DOGE": 0.0001})
+check("V7-13b immediate re-accrual is a no-op", _r13b["shorts"] == 0)
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+config.MODE = _sv13
+
+# V7-14: futures backend flag maps symbols per venue
+_svfb = getattr(config, "FUTURES_BACKEND", "binance")
+config.FUTURES_BACKEND = "hyperliquid"
+_hl = _ex7._fut_symbol("BTC")
+config.FUTURES_BACKEND = "binance"
+_bn = _ex7._fut_symbol("BTC")
+config.FUTURES_BACKEND = _svfb
+check("V7-14 backend symbol mapping (HL=USDC perp, Binance=USDT)",
+      _hl == "BTC/USDC:USDC" and _bn == "BTC/USDT")
+
 print("\n" + "="*50)
 print(f"RESULTS: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

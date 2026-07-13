@@ -150,3 +150,10 @@ regression test (V7-1 … V7-12).
   against the real testnet — verify there before any live use.
 - Exchange-native stop-loss orders as a backstop for software exits are
   still TODO; a process crash leaves positions protected only by restart.
+- The `FUTURES_BACKEND = "hyperliquid"` adapter (added for UK users who
+  cannot obtain Binance futures keys) is flag-gated, defaults to binance,
+  and is UNVERIFIED against the venue — run its testnet first. Client order
+  ids are Binance-only (Hyperliquid cloids require 16-byte hex).
+- Synthetic-short funding accrual uses the latest rate pro-rata rather than
+  discrete 8h settlement snapshots — close enough for paper, not an
+  exchange-accurate reconciliation.

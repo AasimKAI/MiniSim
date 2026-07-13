@@ -37,6 +37,7 @@ _FALLBACK = {
     ("exchange", "update_meta"): lambda a: _ex.update_meta(
         a["coin"], a.get("peak_pnl"), a.get("add_target"), a.get("extra")),
     ("market_data", "get_taker_ratio"): lambda a: _md.get_taker_ratio(a["coin"]),
+    ("exchange", "accrue_funding"): lambda a: _ex.accrue_funding(a.get("rates")),
     ("macro", "get_fear_greed"):      lambda a: _macro.get_fear_greed(),
     ("macro", "get_funding_rates"):   lambda a: _macro.get_funding_rates(),
     ("macro", "get_dominance"):       lambda a: _macro.get_dominance(),
@@ -198,6 +199,10 @@ class MCPClient:
         strat_tp1…) persisted in position meta and merged into positions()."""
         return self.call("exchange", "update_meta", coin=coin,
                          peak_pnl=peak_pnl, add_target=add_target, extra=extra)
+
+    def accrue_funding(self, rates=None):
+        """Settle perp funding on synthetic paper shorts (paper realism)."""
+        return self.call("exchange", "accrue_funding", rates=rates or {})
 
     def fear_greed(self):
         return self.call("macro", "get_fear_greed") or {}

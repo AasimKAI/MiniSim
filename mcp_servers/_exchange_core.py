@@ -83,6 +83,43 @@ def update_meta(coin, peak_pnl=None, add_target=None, extra=None):
         atomic_write_json(_META, m)
     return m[coin]
 
+def accrue_funding(rates=None):
+    """Settle perpetual-style funding on synthetic (paper-wallet) shorts.
+
+    Binance sign convention: positive rate → longs pay shorts (the short
+    RECEIVES), negative → the short pays. Accrued pro-rata against the 8h
+    funding period on current mark notional, settled straight to cash like a
+    real perp, and tracked per position as funding_usd. Real futures
+    positions handle funding on the exchange — this only touches wallet
+    shorts, so it is a no-op in futures-backed modes."""
+    if not getattr(config, "PAPER_FUNDING_ACCRUAL", True):
+        return {"accrued": 0.0, "shorts": 0}
+    rates = rates or {}
+    now = time.time()
+    total = 0.0
+    n = 0
+    with _wallet_lock():
+        w = _load()
+        for coin, s in w.get("shorts", {}).items():
+            rate = rates.get(coin)
+            if rate is None:
+                continue
+            last = s.get("last_funding_ts", s.get("opened_at", now))
+            elapsed = max(0.0, now - last)
+            if elapsed < 60:          # already settled this pass
+                continue
+            notional = _mark(coin) * s["quantity"]
+            pay = rate * notional * (elapsed / (8 * 3600.0))
+            w["cash_usd"] += pay
+            s["funding_usd"] = round(s.get("funding_usd", 0.0) + pay, 6)
+            s["last_funding_ts"] = now
+            total += pay
+            n += 1
+        if n:
+            _save(w)
+    return {"accrued": round(total, 6), "shorts": n}
+
+
 def _clear_meta(coin, m=None):
     own = m is None
     m = m if m is not None else _load_meta()
@@ -261,13 +298,28 @@ def _paper_fill(coin, side, quantity, client_order_id=None):
 # ---------- ccxt clients (cached, one per exchange type per process) ----------
 
 def _futures_available():
-    """True if futures credentials are configured for the current mode."""
+    """True if futures credentials are configured for the current mode/backend."""
     from config import secrets
+    if config.MODE not in ("testnet", "live"):
+        return False
+    if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+        # Same wallet serves HL mainnet and testnet (endpoint differs).
+        return bool(getattr(secrets, "HYPERLIQUID_WALLET_ADDRESS", "")
+                    and getattr(secrets, "HYPERLIQUID_PRIVATE_KEY", ""))
     if config.MODE == "testnet":
         return bool(getattr(secrets, "BINANCE_FUTURES_TESTNET_API_KEY", ""))
-    if config.MODE == "live":
-        return bool(getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", ""))
-    return False
+    return bool(getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", ""))
+
+
+def _fut_symbol(coin):
+    """ccxt symbol for the configured futures backend."""
+    if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+        return f"{coin}/USDC:USDC"   # HL perps are USDC-settled
+    return f"{coin}/USDT"
+
+
+def _fut_settle_ccy():
+    return "USDC" if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid" else "USDT"
 
 
 def _ccxt_client():
@@ -302,18 +354,28 @@ def _futures_client():
             return _fut_ex_cache
         import ccxt
         from config import secrets
-        if config.MODE == "testnet":
-            key = secrets.BINANCE_FUTURES_TESTNET_API_KEY
-            sec = secrets.BINANCE_FUTURES_TESTNET_API_SECRET
+        if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+            wallet = getattr(secrets, "HYPERLIQUID_WALLET_ADDRESS", "")
+            key    = getattr(secrets, "HYPERLIQUID_PRIVATE_KEY", "")
+            if not (wallet and key):
+                raise RuntimeError("no hyperliquid credentials configured")
+            ex = ccxt.hyperliquid({"walletAddress": wallet, "privateKey": key,
+                                   "enableRateLimit": True})
+            if config.MODE == "testnet":
+                ex.set_sandbox_mode(True)
         else:
-            key = getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", "")
-            sec = getattr(secrets, "BINANCE_LIVE_FUTURES_API_SECRET", "")
-        if not key:
-            raise RuntimeError("no futures exchange credentials configured")
-        ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
-                           "options": {"defaultType": "future"}})
-        if config.MODE == "testnet":
-            ex.set_sandbox_mode(True)
+            if config.MODE == "testnet":
+                key = secrets.BINANCE_FUTURES_TESTNET_API_KEY
+                sec = secrets.BINANCE_FUTURES_TESTNET_API_SECRET
+            else:
+                key = getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", "")
+                sec = getattr(secrets, "BINANCE_LIVE_FUTURES_API_SECRET", "")
+            if not key:
+                raise RuntimeError("no futures exchange credentials configured")
+            ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
+                               "options": {"defaultType": "future"}})
+            if config.MODE == "testnet":
+                ex.set_sandbox_mode(True)
         _fut_ex_cache = ex
     return _fut_ex_cache
 
@@ -359,7 +421,7 @@ def _ccxt_balance():
             try:
                 fex = _futures_client()
                 fbal = fex.fetch_balance()
-                fut_total = float(fbal.get("USDT", {}).get("total", 0.0))
+                fut_total = float(fbal.get(_fut_settle_ccy(), {}).get("total", 0.0))
                 equity += fut_total
                 n_open += sum(1 for p in fex.fetch_positions()
                               if (p.get("contracts") or 0) > 0)
@@ -475,11 +537,12 @@ def _ccxt_order(coin, side, quantity, coid):
 
 
 def _ccxt_futures_order(coin, side, quantity, coid):
-    """Place a real USDM futures market order for SHORT entry or COVER exit.
-    Assumes ONE-WAY position mode (the Binance futures testnet default)."""
+    """Place a real perp market order for SHORT entry or COVER exit on the
+    configured FUTURES_BACKEND (Binance USDM or Hyperliquid). Assumes ONE-WAY
+    position mode on Binance (the futures testnet default)."""
     try:
         fex    = _futures_client()
-        symbol = f"{coin}/USDT"
+        symbol = _fut_symbol(coin)
         _init_futures_symbol(fex, symbol)
         quantity = _to_precision(fex, symbol, quantity)
         if quantity <= 0:
@@ -492,7 +555,10 @@ def _ccxt_futures_order(coin, side, quantity, coid):
         else:  # COVER
             order_side = "buy"
             params = {"reduceOnly": True}
-        if coid:
+        if coid and getattr(config, "FUTURES_BACKEND", "binance") == "binance":
+            # Binance-only: Hyperliquid cloids must be 16-byte hex strings, so
+            # our uuid-based ids are invalid there — idempotency on HL relies
+            # on the no-retry design plus the reconciliation log.
             params["newClientOrderId"] = coid
 
         order  = fex.create_order(symbol, "market", order_side, quantity, params=params)

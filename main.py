@@ -194,6 +194,16 @@ def run_cycle(mcp):
             ),
         }
         log.info("Macro: %s", macro["context_str"])
+
+        # Settle perp-style funding on any synthetic (paper-wallet) shorts.
+        # Real futures positions handle funding on the exchange.
+        try:
+            acc = mcp.accrue_funding(funding)
+            if acc and acc.get("shorts"):
+                log.info("Funding settled on %s synthetic short(s): $%+.4f",
+                         acc["shorts"], acc["accrued"])
+        except Exception as _fe:
+            log.debug("funding accrual skipped: %s", _fe)
     except Exception as e:
         log.debug("Macro fetch skipped: %s", e)
 

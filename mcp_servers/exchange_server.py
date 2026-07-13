@@ -22,6 +22,11 @@ try:
         return core.place_order(coin, side, quantity, client_order_id or None)
 
     @mcp.tool()
+    def accrue_funding(rates: dict = None) -> dict:
+        """Settle perpetual funding on synthetic paper shorts (pro-rata 8h)."""
+        return core.accrue_funding(rates)
+
+    @mcp.tool()
     def update_meta(coin: str, peak_pnl: float = None, add_target: int = None,
                     extra: dict = None) -> dict:
         """Persist exit-tracking metadata for a position (peak PnL / taken TP
