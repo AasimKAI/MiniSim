@@ -94,11 +94,7 @@ def atr(highs, lows, closes, period=14):
 # ---------- v5 additions ----------
 def stoch_rsi(closes, period=14, smooth_k=3, smooth_d=3):
     """Stochastic RSI with proper %K and %D smoothing (0-100)."""
-    rsis = []
-    for i in range(period + 1, len(closes) + 1):
-        r = rsi(closes[:i], period)
-        if r is not None:
-            rsis.append(r)
+    rsis = _rsi_series(closes, period)   # O(n) — was O(n²) prefix recomputation
     if len(rsis) < period + smooth_k + smooth_d:
         return None
     raw = []

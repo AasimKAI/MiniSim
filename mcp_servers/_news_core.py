@@ -119,9 +119,10 @@ def get_headlines(coin: str, limit: int = 5) -> list:
         return cached["headlines"][:limit]
 
     headlines = _real_headlines(coin, limit)
-    if not headlines:
-        # Network unavailable or no coin-specific stories — use fixtures
-        headlines = _FIXTURES.get(coin, [f"{coin} — no recent headlines"])[:limit]
+    # No fixture fallback outside fixture mode: the canned headlines are
+    # permanently bullish, and scoring them as real news injected a
+    # systematic long bias for alts with no RSS coverage (UNI, DOGE, …).
+    # An empty list makes the sentiment analyst abstain instead.
 
     _CACHE[coin] = {"ts": time.time(), "headlines": headlines}
     return headlines

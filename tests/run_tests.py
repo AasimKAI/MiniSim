@@ -20,7 +20,7 @@ def synth(trend, n=200, anchor=100.0):
                     "close":c,"volume":100+random.uniform(0,200)+(i if trend>0 else -i*0.0)})
     return out
 
-print("MiniSim v5 — TEST SUITE\n" + "="*50)
+print("MiniSim — TEST SUITE\n" + "="*50)
 
 print("\nSchemas:")
 from schemas.validators import (validate_analyst_verdict, validate_signal,
@@ -271,6 +271,204 @@ _sv_ledger = config.TAX_LEDGER; config.TAX_LEDGER = _tmp_fills.name
 _ctx = build_context(coin="BTC")
 config.TAX_LEDGER = _sv_ledger; _os_m.unlink(_tmp_fills.name)
 check("PERF-6 build_context non-empty with history", "BTC" in _ctx and "W/" in _ctx)
+
+print("\nRegression — v7 wiring & honesty fixes:")
+import tempfile as _tf, json as _j7, time as _t7
+import config.config as _cfg7
+from mcp_servers import _exchange_core as _ex7
+from mcp_servers import _marketdata_core as _md7
+
+# V7-1: chat_json accepts a schema kwarg (this TypeError killed the router)
+_svb7 = config.LLM_BACKEND; config.LLM_BACKEND = "stub"
+import llm.quantized_client as _q7
+if _q7._INFLIGHT is not None:      # drain the worker NEW-3 left sleeping
+    try: _q7._INFLIGHT.result(timeout=10)
+    except Exception: pass
+_r7 = _q7.chat_json("s", "u", schema={"required": ["active_strategies", "risk_level"]})
+check("V7-1 chat_json(schema=) works and plumbs required keys",
+      "active_strategies" in _r7 and "risk_level" in _r7)
+config.LLM_BACKEND = _svb7
+
+# V7-2: router end-to-end selects the LLM's strategies (was: always RangeScalp)
+from strategies.router import _call_router as _cr7
+_qorig7 = _q7.chat_json
+_q7.chat_json = lambda s, u, **k: {"active_strategies": ["MomentumLong"],
+                                   "risk_level": 1.5, "reasoning": "stub"}
+_ms7 = {"direction": "bull", "regime": "trending", "bear_coins": 0, "bull_coins": 9,
+        "neutral_coins": 6, "total_coins": 15, "btc_7d": 5.0, "btc_24h": 1.0,
+        "avg_7d": 4.0, "btc_direction": "bull", "per_coin": {}}
+_perf7 = {"MomentumLong": {"trades": 0, "wins": 0, "pnl_usd": 0.0,
+                           "win_rate": 0.0, "recent_n": 0}}
+_res7 = _cr7(_ms7, _perf7)
+check("V7-2 router selects LLM strategies end-to-end",
+      _res7["active_strategies"] == ["MomentumLong"] and _res7["risk_level"] == 1.5)
+_q7.chat_json = _qorig7
+
+# V7-3: strategy exit params persist and drive exit_manager (was: TypeError)
+_sv_mode7 = config.MODE; config.MODE = "fixture"
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+open(_ex7._META, "w").write("{}")
+_fill7 = _ex7.place_order("ETH", "BUY", 0.1, "v7-meta")
+from main import _strat_meta as _sm7
+_ex7.update_meta("ETH", extra=_sm7("RangeScalp"))
+_pos7 = [p for p in _ex7.positions() if p["coin"] == "ETH"][0]
+check("V7-3a strat params merged onto position",
+      _pos7.get("strat_sl") == 1.5 and _pos7.get("strat_name") == "RangeScalp")
+_sh7, _, _reason7, _ = exit_manager.evaluate(_pos7, _pos7["entry_price"] * 0.984)
+check("V7-3b strategy SL (1.5%) fires instead of config default (2%)",
+      _sh7 and "1.5" in _reason7)
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+open(_ex7._META, "w").write("{}")
+
+# V7-4: COVER is a valid decision action (was: SchemaError killed the flip)
+try:
+    validate_signal({"signal_id": "1", "coin": "UNI", "action": "COVER",
+                     "confidence": 1.0, "timestamp": "x"}); _ok7 = True
+except SchemaError:
+    _ok7 = False
+check("V7-4 COVER action accepted by schema", _ok7)
+
+# V7-5: OversoldBounce returns HOLD when not oversold (was: ValueError)
+from strategies import REGISTRY as _REG7
+_up7 = [{"open": 100 + i, "high": 101 + i, "low": 99 + i,
+         "close": 100.5 + i, "volume": 100.0} for i in range(120)]
+try:
+    _sig7 = _REG7["OversoldBounce"].signal("BTC", _up7, "ranging", {})
+    check("V7-5 OversoldBounce HOLDs instead of raising", _sig7.action == "HOLD")
+except Exception:
+    check("V7-5 OversoldBounce HOLDs instead of raising", False)
+
+# V7-6: taker_ratio has an in-process fallback (was: KeyError for every coin)
+_md7._TAKER_CACHE["BTC"] = (_t7.time(), 0.5)
+_mc7 = MCPClient.__new__(MCPClient); _mc7.transport_ok = False; _mc7._sessions = {}
+_tr7 = _mc7.taker_ratio("BTC")
+check("V7-6 taker_ratio fallback returns neutral float",
+      isinstance(_tr7, float) and 0.0 <= _tr7 <= 1.0)
+
+# V7-7: per-strategy P&L from strategy-tagged ledger (was: pnl_usd never written)
+_tmp7 = _tf.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False); _tmp7.close()
+_sv_ledger7 = config.TAX_LEDGER; config.TAX_LEDGER = _tmp7.name
+from records import tax_ledger as _tl7
+_tl7.record_trade("UNI", "BUY", 10, 10.0, strategy="RangeScalp")
+_tl7.record_trade("UNI", "SELL", 10, 10.5)
+_tl7.record_trade("DOGE", "SHORT", 100, 0.20, strategy="TrendShort")
+_tl7.record_trade("DOGE", "COVER", 100, 0.19)
+from strategies.router import _strategy_performance as _sp7
+_p7 = _sp7()
+check("V7-7a long P&L attributed to its strategy",
+      _p7["RangeScalp"]["trades"] == 1 and abs(_p7["RangeScalp"]["pnl_usd"] - 5.0) < 0.01)
+check("V7-7b short P&L attributed via COVER matching",
+      _p7["TrendShort"]["trades"] == 1 and abs(_p7["TrendShort"]["pnl_usd"] - 1.0) < 0.01)
+config.TAX_LEDGER = _sv_ledger7; os.unlink(_tmp7.name)
+
+# V7-8: router risk_level scales and clamps position sizing (was: ignored)
+_, _, _why7a = risk_manager.check("BTC", "ENTRY_BUY", 100, {"cash_usd": 10000}, [],
+                                  risk_mult=0.5)
+_, _, _why7b = risk_manager.check("BTC", "ENTRY_BUY", 100, {"cash_usd": 10000}, [],
+                                  risk_mult=9.9)
+check("V7-8 risk_mult sizes $50 at 0.5 and clamps to $200",
+      "size $50" in _why7a and "size $200" in _why7b)
+
+# V7-9: protective exits run while the kill switch is active (was: abandoned)
+_sv_dl7 = config.DECISION_LOG; _sv_tx7 = config.TAX_LEDGER
+_tmpd7 = _tf.mkdtemp(prefix="v7-tests-")
+config.DECISION_LOG = os.path.join(_tmpd7, "d.jsonl")
+config.TAX_LEDGER = os.path.join(_tmpd7, "t.jsonl")
+_mark7 = _ex7._mark("ETH")
+_ex7._save({"cash_usd": 9000.0,
+            "positions": {"ETH": {"quantity": 0.5, "entry_price": _mark7 * 2,
+                                  "opened_at": _t7.time()}},
+            "shorts": {}, "fills": []})
+open(_ex7._META, "w").write(_j7.dumps({"ETH": {"peak_pnl": 0.0, "targets_taken": []}}))
+kill_switch.activate("test-v7")
+import main as _main7
+_main7.run_exits(_mc7)
+kill_switch.deactivate()
+_w7 = _ex7._load()
+check("V7-9 stop-loss executes under active kill switch",
+      "ETH" not in _w7["positions"] and any(f["side"] == "SELL" for f in _w7["fills"]))
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+open(_ex7._META, "w").write("{}")
+config.DECISION_LOG = _sv_dl7; config.TAX_LEDGER = _sv_tx7
+
+# V7-10: no fixture headlines outside fixture mode; sentiment abstains, 0 LLM calls
+config.MODE = "paper"
+from mcp_servers import _news_core as _news7
+_svfetch7 = _news7._fetch_rss_titles
+_news7._fetch_rss_titles = lambda url, timeout=8: []
+_news7._CACHE.clear()
+check("V7-10a no canned headlines in paper mode", _news7.get_headlines("UNI") == [])
+_news7._fetch_rss_titles = _svfetch7
+_calls7 = {"n": 0}
+_q7.chat_json = lambda *a, **k: _calls7.__setitem__("n", _calls7["n"] + 1) or \
+                                {"verdict": "bullish", "confidence": 0.9}
+import analysts.sentiment_analyst as _sa7
+_sa_orig7 = _sa7.chat_json; _sa7.chat_json = _q7.chat_json
+class _NoNews7:
+    def headlines(self, coin, limit=5): return []
+_v7 = _sa7.sentiment_analyst("UNI", _NoNews7())
+check("V7-10b sentiment abstains on empty headlines (no LLM call)",
+      _v7["confidence"] == 0.0 and "abstain" in _v7["reasoning"] and _calls7["n"] == 0)
+_q7.chat_json = _qorig7; _sa7.chat_json = _sa_orig7
+
+# V7-11: synthetic-data veto blocks entries in non-fixture modes
+_svreal7 = _md7._real_candles
+_md7._real_candles = lambda coin, count=300: (None, None)
+_md7._CACHE.clear(); _md7._PX_CACHE.clear()
+_md7._OB_CACHE["BTC"] = (_t7.time(), {"coin": "BTC", "imbalance": 0.0})
+_md7._TAKER_CACHE["BTC"] = (_t7.time(), 0.5)
+_dec7, _, _verd7, _reg7, _ = _main7.analyse_coin(_mc7, "BTC", None, macro={})
+check("V7-11 synthetic source vetoes entry without running analysts",
+      _dec7["action"] == "STAND_DOWN" and "data_source_veto" in _dec7["reasoning"]
+      and _verd7 == [])
+_md7._real_candles = _svreal7
+_md7._CACHE.clear(); _md7._PX_CACHE.clear()
+config.MODE = _sv_mode7
+
+# V7-12: paper fills charge fee + slippage (was: frictionless)
+config.MODE = "fixture"
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+open(_ex7._META, "w").write("{}")
+_b7 = _ex7.place_order("ETH", "BUY", 1.0, "v7-fee-b")
+_s7 = _ex7.place_order("ETH", "SELL", 1.0, "v7-fee-s")
+_wf7 = _ex7._load()
+_loss7 = 10000.0 - _wf7["cash_usd"]
+check("V7-12 round trip costs ~0.24% in fees+slippage",
+      _b7["fee_usd"] > 0 and _s7["fee_usd"] > 0 and _b7["price"] > _s7["price"]
+      and 0.0015 * _b7["price"] < _loss7 < 0.0035 * _b7["price"])
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+open(_ex7._META, "w").write("{}")
+config.MODE = _sv_mode7
+
+# V7-13: synthetic shorts accrue perp funding (paper realism)
+_sv13 = config.MODE; config.MODE = "fixture"
+_ex7._save({"cash_usd": 9900.0, "positions": {},
+            "shorts": {"DOGE": {"quantity": 100.0, "entry_price": 0.16,
+                                "opened_at": _t7.time() - 8 * 3600,
+                                "collateral": 16.0}},
+            "fills": []})
+_mark13 = _ex7._mark("DOGE")
+_ex7.accrue_funding({"DOGE": 0.0001})     # +ve rate: longs pay shorts → we RECEIVE
+_w13 = _ex7._load()
+_exp13 = 0.0001 * _mark13 * 100.0         # one full 8h period on mark notional
+_got13 = _w13["cash_usd"] - 9900.0
+check("V7-13a positive funding credits a synthetic short",
+      _got13 > 0 and abs(_got13 - _exp13) < _exp13 * 0.05 + 1e-9
+      and _w13["shorts"]["DOGE"]["funding_usd"] > 0)
+_r13b = _ex7.accrue_funding({"DOGE": 0.0001})
+check("V7-13b immediate re-accrual is a no-op", _r13b["shorts"] == 0)
+_ex7._save({"cash_usd": 10000.0, "positions": {}, "shorts": {}, "fills": []})
+config.MODE = _sv13
+
+# V7-14: futures backend flag maps symbols per venue
+_svfb = getattr(config, "FUTURES_BACKEND", "binance")
+config.FUTURES_BACKEND = "hyperliquid"
+_hl = _ex7._fut_symbol("BTC")
+config.FUTURES_BACKEND = "binance"
+_bn = _ex7._fut_symbol("BTC")
+config.FUTURES_BACKEND = _svfb
+check("V7-14 backend symbol mapping (HL=USDC perp, Binance=USDT)",
+      _hl == "BTC/USDC:USDC" and _bn == "BTC/USDT")
 
 print("\n" + "="*50)
 print(f"RESULTS: {PASS} passed, {FAIL} failed")

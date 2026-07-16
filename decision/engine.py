@@ -179,7 +179,9 @@ def research(coin, verdicts, regime, strategy_signals=None, macro_context=""):
         f"Reply JSON with keys: verdict (bullish|bearish|neutral), confidence (0-1)."
         f"{strategy_instr}"
     )
-    return chat_json(sysmsg, user)
+    keys = (("verdict", "confidence", "reasoning", "strategy")
+            if has_strategies else ("verdict", "confidence", "reasoning"))
+    return chat_json(sysmsg, user, schema_keys=keys)
 
 
 def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
@@ -202,8 +204,15 @@ def decide(coin, verdicts, regime, strategy_signals=None, macro_context="",
     direction = "bullish" if score > 0.25 else "bearish" if score < -0.25 else "neutral"
     arith_conf = min(1.0, abs(score))
 
-    ceo = research(coin, verdicts, regime, strategy_signals=strategy_signals,
-                   macro_context=macro_context)
+    # Skip the expensive CEO inference when an entry is impossible anyway
+    # (regime block / quiet hours) — the hard vetoes below still apply.
+    utc_h = _dt.datetime.utcnow().hour
+    if not allowed or utc_h in _QUIET_HOURS:
+        ceo = {"verdict": "neutral", "confidence": 0.0,
+               "_backend": "skipped(" + ("regime" if not allowed else "quiet-hours") + ")"}
+    else:
+        ceo = research(coin, verdicts, regime, strategy_signals=strategy_signals,
+                       macro_context=macro_context)
 
     ceo_dir = ceo.get("verdict", "neutral")
     if ceo_dir not in ("bullish", "bearish", "neutral"):

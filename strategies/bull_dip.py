@@ -84,7 +84,11 @@ class DipBuy(Strategy):
             elif stoch["k"] < 25:
                 score += 1; reasons.append(f"StochK={stoch['k']:.0f}")
 
-        if m and m["hist"] > -abs(m["hist"] * 0.8):
+        # improving = histogram rising vs the previous bar (the old expression
+        # `hist > -abs(hist*0.8)` reduced to `hist > 0` and could never detect
+        # an improving-but-still-negative histogram)
+        m_prev = ind.macd(c[:-1])
+        if m and m_prev and m["hist"] > m_prev["hist"]:
             score += 1; reasons.append("MACD hist improving")
 
         if div == "bullish":

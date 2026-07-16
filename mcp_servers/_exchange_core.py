@@ -62,7 +62,12 @@ def _load_meta():
 def position_meta():
     return _load_meta()
 
-def update_meta(coin, peak_pnl=None, add_target=None):
+def update_meta(coin, peak_pnl=None, add_target=None, extra=None):
+    """Persist exit-tracking state and optional per-position overrides.
+
+    extra: dict of additional keys (e.g. strat_sl, strat_tp1…) stored on the
+    position meta so exit_manager can use strategy-specific exits. peak_pnl
+    and targets_taken can never be clobbered through extra."""
     with _wallet_lock():
         m = _load_meta()
         cur = m.get(coin, {"peak_pnl": None, "targets_taken": []})
@@ -71,9 +76,49 @@ def update_meta(coin, peak_pnl=None, add_target=None):
                                else max(cur["peak_pnl"], peak_pnl))
         if add_target is not None and add_target not in cur["targets_taken"]:
             cur["targets_taken"].append(add_target)
+        if extra:
+            cur.update({k: v for k, v in extra.items()
+                        if k not in ("peak_pnl", "targets_taken")})
         m[coin] = cur
         atomic_write_json(_META, m)
     return m[coin]
+
+def accrue_funding(rates=None):
+    """Settle perpetual-style funding on synthetic (paper-wallet) shorts.
+
+    Binance sign convention: positive rate → longs pay shorts (the short
+    RECEIVES), negative → the short pays. Accrued pro-rata against the 8h
+    funding period on current mark notional, settled straight to cash like a
+    real perp, and tracked per position as funding_usd. Real futures
+    positions handle funding on the exchange — this only touches wallet
+    shorts, so it is a no-op in futures-backed modes."""
+    if not getattr(config, "PAPER_FUNDING_ACCRUAL", True):
+        return {"accrued": 0.0, "shorts": 0}
+    rates = rates or {}
+    now = time.time()
+    total = 0.0
+    n = 0
+    with _wallet_lock():
+        w = _load()
+        for coin, s in w.get("shorts", {}).items():
+            rate = rates.get(coin)
+            if rate is None:
+                continue
+            last = s.get("last_funding_ts", s.get("opened_at", now))
+            elapsed = max(0.0, now - last)
+            if elapsed < 60:          # already settled this pass
+                continue
+            notional = _mark(coin) * s["quantity"]
+            pay = rate * notional * (elapsed / (8 * 3600.0))
+            w["cash_usd"] += pay
+            s["funding_usd"] = round(s.get("funding_usd", 0.0) + pay, 6)
+            s["last_funding_ts"] = now
+            total += pay
+            n += 1
+        if n:
+            _save(w)
+    return {"accrued": round(total, 6), "shorts": n}
+
 
 def _clear_meta(coin, m=None):
     own = m is None
@@ -131,7 +176,8 @@ def positions():
         else:
             pnl_pct = (price - p["entry_price"]) / p["entry_price"] * 100 if p["entry_price"] else 0
         mm = meta.get(coin, {})
-        out.append({**p, "current_price": price,
+        # Merge ALL meta keys (incl. strat_* overrides) so exit_manager sees them
+        out.append({**p, **mm, "current_price": price,
                     "unrealised_pnl_pct": round(pnl_pct, 2),
                     "peak_pnl": mm.get("peak_pnl"),
                     "targets_taken": mm.get("targets_taken", [])})
@@ -139,28 +185,51 @@ def positions():
 
 
 def _mark(coin):
-    from mcp_servers._marketdata_core import get_ticker
-    return get_ticker(coin)["price"]
+    # Fresh short-TTL price — exits and fills must not run on the 10-minute
+    # candle-cache vintage the think-cycle uses.
+    from mcp_servers._marketdata_core import get_price
+    return get_price(coin)
 
 
 # ---------- order placement ----------
+def _exec_price(coin, side):
+    """Mark price adjusted for simulated slippage: takers buying pay up,
+    takers selling hit the bid."""
+    px = _mark(coin)
+    slip = getattr(config, "PAPER_SLIPPAGE_BPS", 0.0) / 10000.0
+    if side in ("BUY", "COVER"):      # buying base / buying back a short
+        return px * (1 + slip)
+    return px * (1 - slip)            # SELL / SHORT
+
+
+def _fee(notional):
+    """Simulated taker fee on a fill's notional value."""
+    return abs(notional) * getattr(config, "PAPER_FEE_PCT", 0.0)
+
+
 def place_order(coin, side, quantity, client_order_id=None):
     """Place an order. Idempotent on client_order_id.
-    Paper mode fills against the current mark price under the wallet lock."""
+    Paper mode fills against a fresh mark price with simulated fee and
+    slippage, under the wallet lock."""
     if config.MODE in ("testnet", "live"):
         return _ccxt_order(coin, side, quantity, client_order_id)
+    return _paper_fill(coin, side, quantity, client_order_id)
 
+
+def _paper_fill(coin, side, quantity, client_order_id=None):
     coid = client_order_id or str(uuid.uuid4())
-    price = _mark(coin)
+    price = _exec_price(coin, side)
     with _wallet_lock():
         w = _load()
         if any(f["client_order_id"] == coid for f in w["fills"]):
             return {"status": "duplicate_ignored", "client_order_id": coid}
         notional = price * quantity
+        fee = 0.0
         if side == "BUY":
-            if notional > w["cash_usd"]:
+            fee = _fee(notional)
+            if notional + fee > w["cash_usd"]:
                 return {"status": "rejected", "reason": "insufficient cash"}
-            w["cash_usd"] -= notional
+            w["cash_usd"] -= notional + fee
             pos = w["positions"].get(coin)
             if pos:
                 tot = pos["quantity"] + quantity
@@ -177,7 +246,8 @@ def place_order(coin, side, quantity, client_order_id=None):
             if not pos:
                 return {"status": "rejected", "reason": "no position to sell"}
             sell_qty = min(quantity, pos["quantity"])   # never sell more than held
-            w["cash_usd"] += price * sell_qty
+            fee = _fee(price * sell_qty)
+            w["cash_usd"] += price * sell_qty - fee
             pos["quantity"] -= sell_qty
             quantity = sell_qty
             if pos["quantity"] <= 1e-9:
@@ -185,12 +255,12 @@ def place_order(coin, side, quantity, client_order_id=None):
                 _clear_meta(coin)
 
         elif side == "SHORT":  # synthetic short: reserve collateral from cash
-            notional = price * quantity
-            if notional > w["cash_usd"]:
+            fee = _fee(notional)
+            if notional + fee > w["cash_usd"]:
                 return {"status": "rejected", "reason": "insufficient cash for short collateral"}
             if coin in w.get("shorts", {}):
                 return {"status": "rejected", "reason": f"already short {coin}"}
-            w["cash_usd"] -= notional
+            w["cash_usd"] -= notional + fee
             w.setdefault("shorts", {})[coin] = {
                 "quantity": quantity, "entry_price": price,
                 "opened_at": time.time(), "collateral": notional,
@@ -208,7 +278,8 @@ def place_order(coin, side, quantity, client_order_id=None):
             frac = cover_qty / short_pos["quantity"]
             pnl = (short_pos["entry_price"] - price) * cover_qty
             collateral_return = short_pos["collateral"] * frac
-            w["cash_usd"] += collateral_return + pnl
+            fee = _fee(price * cover_qty)
+            w["cash_usd"] += collateral_return + pnl - fee
             w["realized_short_pnl"] = w.get("realized_short_pnl", 0.0) + pnl
             short_pos["quantity"] -= cover_qty
             short_pos["collateral"] -= collateral_return
@@ -217,7 +288,8 @@ def place_order(coin, side, quantity, client_order_id=None):
                 del shorts[coin]
                 _clear_meta(coin)
         fill = {"client_order_id": coid, "coin": coin, "side": side,
-                "quantity": round(quantity, 8), "price": price, "ts": time.time()}
+                "quantity": round(quantity, 8), "price": price,
+                "fee_usd": round(fee, 6), "ts": time.time()}
         w["fills"].append(fill)
         _save(w)
     return {"status": "filled", **fill}
@@ -226,13 +298,28 @@ def place_order(coin, side, quantity, client_order_id=None):
 # ---------- ccxt clients (cached, one per exchange type per process) ----------
 
 def _futures_available():
-    """True if futures credentials are configured for the current mode."""
+    """True if futures credentials are configured for the current mode/backend."""
     from config import secrets
+    if config.MODE not in ("testnet", "live"):
+        return False
+    if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+        # Same wallet serves HL mainnet and testnet (endpoint differs).
+        return bool(getattr(secrets, "HYPERLIQUID_WALLET_ADDRESS", "")
+                    and getattr(secrets, "HYPERLIQUID_PRIVATE_KEY", ""))
     if config.MODE == "testnet":
         return bool(getattr(secrets, "BINANCE_FUTURES_TESTNET_API_KEY", ""))
-    if config.MODE == "live":
-        return bool(getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", ""))
-    return False
+    return bool(getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", ""))
+
+
+def _fut_symbol(coin):
+    """ccxt symbol for the configured futures backend."""
+    if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+        return f"{coin}/USDC:USDC"   # HL perps are USDC-settled
+    return f"{coin}/USDT"
+
+
+def _fut_settle_ccy():
+    return "USDC" if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid" else "USDT"
 
 
 def _ccxt_client():
@@ -267,18 +354,28 @@ def _futures_client():
             return _fut_ex_cache
         import ccxt
         from config import secrets
-        if config.MODE == "testnet":
-            key = secrets.BINANCE_FUTURES_TESTNET_API_KEY
-            sec = secrets.BINANCE_FUTURES_TESTNET_API_SECRET
+        if getattr(config, "FUTURES_BACKEND", "binance") == "hyperliquid":
+            wallet = getattr(secrets, "HYPERLIQUID_WALLET_ADDRESS", "")
+            key    = getattr(secrets, "HYPERLIQUID_PRIVATE_KEY", "")
+            if not (wallet and key):
+                raise RuntimeError("no hyperliquid credentials configured")
+            ex = ccxt.hyperliquid({"walletAddress": wallet, "privateKey": key,
+                                   "enableRateLimit": True})
+            if config.MODE == "testnet":
+                ex.set_sandbox_mode(True)
         else:
-            key = getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", "")
-            sec = getattr(secrets, "BINANCE_LIVE_FUTURES_API_SECRET", "")
-        if not key:
-            raise RuntimeError("no futures exchange credentials configured")
-        ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
-                           "options": {"defaultType": "future"}})
-        if config.MODE == "testnet":
-            ex.set_sandbox_mode(True)
+            if config.MODE == "testnet":
+                key = secrets.BINANCE_FUTURES_TESTNET_API_KEY
+                sec = secrets.BINANCE_FUTURES_TESTNET_API_SECRET
+            else:
+                key = getattr(secrets, "BINANCE_LIVE_FUTURES_API_KEY", "")
+                sec = getattr(secrets, "BINANCE_LIVE_FUTURES_API_SECRET", "")
+            if not key:
+                raise RuntimeError("no futures exchange credentials configured")
+            ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
+                               "options": {"defaultType": "future"}})
+            if config.MODE == "testnet":
+                ex.set_sandbox_mode(True)
         _fut_ex_cache = ex
     return _fut_ex_cache
 
@@ -324,7 +421,7 @@ def _ccxt_balance():
             try:
                 fex = _futures_client()
                 fbal = fex.fetch_balance()
-                fut_total = float(fbal.get("USDT", {}).get("total", 0.0))
+                fut_total = float(fbal.get(_fut_settle_ccy(), {}).get("total", 0.0))
                 equity += fut_total
                 n_open += sum(1 for p in fex.fetch_positions()
                               if (p.get("contracts") or 0) > 0)
@@ -394,6 +491,19 @@ def _ccxt_positions():
 
 # ---------- order placement (ccxt) ----------
 
+def _to_precision(ex, symbol, quantity):
+    """Round a raw quantity to the exchange's LOT_SIZE step. Binance rejects
+    orders whose amount doesn't match the symbol's stepSize filter — a raw
+    round(usd/price, 6) fails on many symbols (e.g. DOGE step=1, BTC=1e-5).
+    Returns 0.0 if the quantity rounds below the minimum tradable step."""
+    try:
+        if not getattr(ex, "markets", None):
+            ex.load_markets()
+        return float(ex.amount_to_precision(symbol, quantity))
+    except Exception:
+        return quantity   # precision data unavailable — let the exchange decide
+
+
 def _ccxt_order(coin, side, quantity, coid):
     """Route to spot (BUY/SELL) or futures (SHORT/COVER) exchange."""
     if side in ("SHORT", "COVER"):
@@ -411,6 +521,10 @@ def _ccxt_order(coin, side, quantity, coid):
             if held <= 0:
                 return {"status": "rejected", "reason": "no base balance to sell"}
             quantity = min(quantity, held)
+        quantity = _to_precision(ex, symbol, quantity)
+        if quantity <= 0:
+            return {"status": "rejected",
+                    "reason": "quantity below exchange LOT_SIZE precision"}
         params = {"newClientOrderId": coid} if coid else {}
         order = ex.create_order(symbol, "market", side.lower(), quantity, params=params)
         px     = order.get("average") or order.get("price")
@@ -423,12 +537,17 @@ def _ccxt_order(coin, side, quantity, coid):
 
 
 def _ccxt_futures_order(coin, side, quantity, coid):
-    """Place a real USDM futures market order for SHORT entry or COVER exit.
-    Assumes ONE-WAY position mode (the Binance futures testnet default)."""
+    """Place a real perp market order for SHORT entry or COVER exit on the
+    configured FUTURES_BACKEND (Binance USDM or Hyperliquid). Assumes ONE-WAY
+    position mode on Binance (the futures testnet default)."""
     try:
         fex    = _futures_client()
-        symbol = f"{coin}/USDT"
+        symbol = _fut_symbol(coin)
         _init_futures_symbol(fex, symbol)
+        quantity = _to_precision(fex, symbol, quantity)
+        if quantity <= 0:
+            return {"status": "rejected",
+                    "reason": "quantity below exchange LOT_SIZE precision"}
 
         if side == "SHORT":
             order_side = "sell"
@@ -436,7 +555,10 @@ def _ccxt_futures_order(coin, side, quantity, coid):
         else:  # COVER
             order_side = "buy"
             params = {"reduceOnly": True}
-        if coid:
+        if coid and getattr(config, "FUTURES_BACKEND", "binance") == "binance":
+            # Binance-only: Hyperliquid cloids must be 16-byte hex strings, so
+            # our uuid-based ids are invalid there — idempotency on HL relies
+            # on the no-retry design plus the reconciliation log.
             params["newClientOrderId"] = coid
 
         order  = fex.create_order(symbol, "market", order_side, quantity, params=params)
@@ -450,46 +572,10 @@ def _ccxt_futures_order(coin, side, quantity, coid):
 
 
 def _paper_short_order(coin, side, quantity, coid):
-    """Synthetic short simulation used when futures credentials are absent."""
-    price = _mark(coin)
-    coid  = coid or str(uuid.uuid4())
-    with _wallet_lock():
-        w = _load()
-        if any(f["client_order_id"] == coid for f in w["fills"]):
-            return {"status": "duplicate_ignored", "client_order_id": coid}
-        if side == "SHORT":
-            notional = price * quantity
-            if notional > w["cash_usd"]:
-                return {"status": "rejected", "reason": "insufficient cash for short collateral"}
-            if coin in w.get("shorts", {}):
-                return {"status": "rejected", "reason": f"already short {coin}"}
-            w["cash_usd"] -= notional
-            w.setdefault("shorts", {})[coin] = {
-                "quantity": quantity, "entry_price": price,
-                "opened_at": time.time(), "collateral": notional,
-            }
-            m = _load_meta()
-            m[coin] = {"peak_pnl": 0.0, "targets_taken": []}
-            atomic_write_json(_META, m)
-        else:  # COVER
-            shorts = w.get("shorts", {})
-            sp = shorts.get(coin)
-            if not sp:
-                return {"status": "rejected", "reason": f"no short to cover on {coin}"}
-            cover_qty = min(quantity, sp["quantity"])
-            frac = cover_qty / sp["quantity"]
-            w["cash_usd"] += sp["collateral"] * frac + (sp["entry_price"] - price) * cover_qty
-            sp["quantity"]   -= cover_qty
-            sp["collateral"] -= sp["collateral"] * frac
-            quantity = cover_qty
-            if sp["quantity"] <= 1e-9:
-                del shorts[coin]
-                _clear_meta(coin)
-        fill = {"client_order_id": coid, "coin": coin, "side": side,
-                "quantity": round(quantity, 8), "price": price, "ts": time.time()}
-        w["fills"].append(fill)
-        _save(w)
-    return {"status": "filled", **fill}
+    """Synthetic short simulation used when futures credentials are absent.
+    Delegates to the shared paper-fill logic (was a near-verbatim copy that
+    had already drifted — no realized_short_pnl tracking, no fees)."""
+    return _paper_fill(coin, side, quantity, coid)
 
 
 def _record_fill(coid, coin, side, quantity, price):

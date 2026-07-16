@@ -25,7 +25,8 @@ force one.
 |---------|----------------|
 | v4 | Ollama (Docker), basic RSI/MACD/EMA indicators, planned dashboard |
 | v5 | Quantized on-device GGUF model, 14-indicator suite, MCP server architecture, two live dashboards, 40/40 tests, two independent code-review cycles |
-| **v6** | **Multi-strategy system** — 6 named strategies, hourly LLM router, bull/bear/neutral market classifier, per-position SL/TP overrides, historical backtester, strategies panel on both dashboards |
+| v6 | Multi-strategy system — 6 named strategies, hourly LLM router, bull/bear/neutral market classifier, per-position SL/TP overrides, historical backtester, strategies panel on both dashboards |
+| **v7** | **Wiring & honesty release** — fixes from a full v6 code review: strategy router / per-strategy exits / short-cover flip actually execute now; per-strategy P&L feedback and risk_level sizing are live; exits use fresh ≤20s mark prices; kill switch keeps protective exits running; synthetic-data entry veto; no canned headlines outside fixture mode; paper fills charge fees + slippage; live orders respect LOT_SIZE; unknown orders logged for reconciliation |
 
 ---
 

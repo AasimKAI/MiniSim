@@ -1,5 +1,6 @@
 """Layer D — order execution via the exchange MCP server. Idempotent."""
-from common import get_logger
+from config import config
+from common import get_logger, append_jsonl, utcnow_iso
 log = get_logger("execution")
 
 def execute(mcp, signal_id, coin, side, quantity, trigger="entry"):
@@ -15,4 +16,17 @@ def execute(mcp, signal_id, coin, side, quantity, trigger="entry"):
                     res.get("status"), res.get("reason", ""))
     else:
         log.info("order %s %s %s -> %s", coin, side, quantity, res.get("status"))
+    if res.get("status") == "unknown":
+        # The order MAY have executed (transport died mid-flight and is never
+        # retried, to avoid double execution). Record it so the operator can
+        # reconcile against the exchange's trade history.
+        try:
+            append_jsonl(config.RECONCILIATION_LOG, {
+                "ts": utcnow_iso(), "client_order_id": coid, "coin": coin,
+                "side": side, "quantity": quantity, "trigger": trigger,
+                "status": res.get("status"), "reason": res.get("reason", "")})
+            log.warning("order outcome UNKNOWN — logged to %s for reconciliation",
+                        config.RECONCILIATION_LOG)
+        except Exception:
+            pass
     return res

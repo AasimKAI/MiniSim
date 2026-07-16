@@ -4,584 +4,326 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="__CSRF__">
-<meta name="theme-color" content="#0b0e14">
+<meta name="theme-color" content="#0d0d0d">
 <title>MiniSim — Macro</title>
+<link rel="stylesheet" href="/assets/theme.css">
 <style>
-:root{
-  --bg:#0b0e14;--card:#151a23;--card2:#0e131b;--line:#222c3a;
-  --txt:#e6edf3;--dim:#8b98a9;
-  --up:#3fb950;--dn:#f85149;--warn:#d29922;--acc:#58a6ff;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--txt);
-     font-family:-apple-system,'Segoe UI',Roboto,sans-serif;min-height:100dvh;padding-bottom:40px}
+main{padding:14px;max-width:860px;margin:0 auto;padding-bottom:40px}
+.lab{display:block;margin:20px 0 9px}
+main .lab:first-child{margin-top:0}
 
-/* ── TOPBAR ── */
-.topbar{position:sticky;top:0;z-index:99;background:rgba(11,14,20,.95);
-        backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
-        display:flex;align-items:center;gap:10px;padding:0 14px;height:50px}
-.brand{font-size:15px;font-weight:800;white-space:nowrap}
-.brand small{color:var(--dim);font-weight:400;font-size:11px}
-.topbar-nav{display:flex;gap:6px;margin-left:auto;align-items:center}
-.nav-link{font-size:11px;color:var(--acc);text-decoration:none;padding:3px 9px;
-          border-radius:20px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
-.nav-link:active{opacity:.7}
-#updStamp{font-size:10px;color:var(--dim);white-space:nowrap}
+/* signal banner */
+.banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px}
+.sig-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sig-text{flex:1;min-width:200px;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.sig-text b{font-size:13px}
+.sig-counts{font-size:10px;color:var(--muted);text-align:right;line-height:1.5;flex-shrink:0}
+.sig-counts b{color:var(--ink2)}
 
-/* ── LAYOUT ── */
-.body{padding:14px 14px 0}
-.section-label{font-size:10px;font-weight:700;text-transform:uppercase;
-               letter-spacing:1.5px;color:var(--dim);margin:18px 0 8px}
-.section-label:first-child{margin-top:0}
+/* sentiment row */
+.senti{display:grid;gap:8px;grid-template-columns:1fr 1fr;align-items:stretch}
+@media(max-width:560px){.senti{grid-template-columns:1fr}}
+.fng-card{display:flex;align-items:center;gap:14px;padding:14px}
+canvas.fng-gauge{width:110px;height:70px;display:block;flex-shrink:0}
+.fng-value{font-size:40px;font-weight:800;letter-spacing:-1.6px;line-height:1;
+           font-variant-numeric:tabular-nums}
+.fng-label{font-size:13px;font-weight:650;margin-top:2px}
+.fng-prev{font-size:10px;color:var(--muted);margin-top:4px}
+.fng-meter{height:6px;border-radius:3px;background:var(--surface2);margin-top:9px;overflow:hidden}
+.fng-meter>i{display:block;height:100%;border-radius:3px;transition:width .8s}
+.vd-stack{display:flex;flex-direction:column;gap:8px}
+.vd-stack .tile{flex:1}
 
-/* ── SIGNAL BANNER ── */
-.signal-banner{border-radius:12px;padding:12px 16px;
-               border:1px solid var(--line);background:var(--card);
-               display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.signal-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.signal-text{flex:1;min-width:0;font-size:13px;line-height:1.5}
-.signal-text b{font-size:14px}
-.signal-updated{font-size:10px;color:var(--dim);flex-shrink:0;text-align:right;line-height:1.4}
+/* tradfi */
+.tf-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.tile .t-chg{font-size:12px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
 
-/* ── CARD GRID ── */
-.card-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
-.metric-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
-             padding:12px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden}
-.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-.mc-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim)}
-.mc-value{font-size:26px;font-weight:800;letter-spacing:-1px;line-height:1}
-.mc-sub{font-size:11px;color:var(--dim);line-height:1.3}
-.mc-change{font-size:12px;font-weight:600;margin-top:2px}
-.mc-badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;
-          margin-top:4px;letter-spacing:.4px}
-
-/* Fear & Greed card — wider */
-.fng-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;
-          display:flex;align-items:center;gap:14px}
-.fng-gauge-wrap{flex-shrink:0}
-canvas.fng-gauge{display:block}
-.fng-info{flex:1;min-width:0}
-.fng-value{font-size:42px;font-weight:800;letter-spacing:-2px;line-height:1}
-.fng-label{font-size:13px;font-weight:600;margin-top:2px}
-.fng-prev{font-size:10px;color:var(--dim);margin-top:4px}
-.fng-bar-bg{height:6px;border-radius:3px;background:var(--card2);border:1px solid var(--line);margin-top:8px;overflow:hidden}
-.fng-bar{height:6px;border-radius:3px;transition:width .8s}
-
-/* ── DOMINANCE BAR ── */
-.dom-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-.dom-bar{display:flex;height:28px;border-radius:8px;overflow:hidden;margin-top:10px;gap:1px}
-.dom-seg{display:flex;align-items:center;justify-content:center;
-         font-size:10px;font-weight:700;transition:flex .8s;min-width:0;overflow:hidden}
-.dom-seg span{white-space:nowrap;overflow:hidden;text-overflow:clip;padding:0 4px}
+/* dominance */
+.dom-card{padding:14px}
+.dom-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+.dom-title{font-size:13px;font-weight:700}
+.dom-mcap{font-size:11px;color:var(--muted)}
+.dom-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin-top:12px;gap:2px}
+.dom-seg{display:flex;align-items:center;justify-content:center;font-size:10px;
+         font-weight:700;transition:flex .8s;min-width:0;overflow:hidden}
+.dom-seg span{white-space:nowrap;overflow:hidden;padding:0 4px}
 .dom-btc{background:#F7931A;color:#000}
 .dom-eth{background:#627EEA;color:#fff}
-.dom-alt{background:#3a4a5e;color:var(--dim)}
-.dom-legend{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap}
-.dom-legend-item{display:flex;align-items:center;gap:5px;font-size:11px}
-.dom-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
-.dom-mcap{font-size:11px;color:var(--dim);margin-top:8px}
+.dom-alt{background:var(--baseline);color:var(--ink2)}
+.dom-legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--ink2)}
+.dom-legend .sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
 
-/* ── MARKET STRUCTURE TABLE ── */
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;
-            background:var(--card);border:1px solid var(--line);border-radius:12px}
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:560px}
-thead th{position:sticky;top:0;background:var(--card);z-index:1;
-         text-align:left;color:var(--dim);font-size:9px;font-weight:700;
-         text-transform:uppercase;letter-spacing:.8px;padding:10px 12px 8px;
-         border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none}
-thead th:hover{color:var(--txt)}
-thead th .sort-arrow{margin-left:3px;opacity:.4}
-thead th.sorted .sort-arrow{opacity:1}
-tbody tr{border-bottom:1px solid var(--line)}
-tbody tr:last-child{border-bottom:none}
-tbody tr:hover{background:rgba(255,255,255,.02)}
-td{padding:9px 12px;vertical-align:middle}
-.coin-cell{display:flex;align-items:center;gap:7px}
-.coin-dot{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;
-          align-items:center;justify-content:center;font-size:7px;font-weight:800;color:#fff}
-.coin-name{font-size:12px;font-weight:700;letter-spacing:.2px}
-.num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.ls-bar-wrap{display:flex;height:6px;border-radius:3px;overflow:hidden;width:72px}
-.ls-long{background:var(--up);transition:width .6s}
-.ls-short{background:var(--dn);flex:1}
-.ls-pct{font-size:10px;margin-top:2px;color:var(--dim)}
-
-/* ── TRADFI ROW ── */
-.tradfi-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
-.tf-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
-.tf-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim)}
-.tf-value{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-top:4px}
-.tf-change{font-size:12px;font-weight:600;margin-top:2px}
-.tf-note{font-size:10px;color:var(--dim);margin-top:5px;line-height:1.4}
-
-/* ── UTILS ── */
-.up{color:var(--up)}.dn{color:var(--dn)}.dim{color:var(--dim)}.warn{color:var(--warn)}
-.spinner{text-align:center;padding:40px;color:var(--dim);font-size:13px}
+/* structure table */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{min-width:560px}
+.tbl th{cursor:pointer;user-select:none}
+.tbl th:hover{color:var(--ink2)}
+.tbl th .arr{margin-left:3px;opacity:.35}
+.tbl th.sorted .arr{opacity:1}
+.ls-track{display:flex;height:6px;border-radius:3px;overflow:hidden;width:74px;background:var(--surface2)}
+.ls-track>i{display:block;height:100%}
+.ls-pct{font-size:10px;margin-top:3px;color:var(--muted);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand">MiniSim <small>Macro</small></div>
-  <div class="topbar-nav">
-    <span id="updStamp"></span>
-    <a class="nav-link" href="/">Dashboard</a>
-    <a class="nav-link" href="/pi">Pi</a>
-    <a class="nav-link" href="/report">Report</a>
-  </div>
-</div>
+<header class="topbar">
+  <div class="brand"><span class="name">MiniSim</span><span class="ver">Macro</span></div>
+  <div class="spacer"></div>
+  <span class="chip num" id="updStamp">—</span>
+  <a class="navlink" href="/">Dashboard</a>
+  <a class="navlink" href="/pi">Pi</a>
+  <a class="navlink" href="/report">Report</a>
+</header>
 
-<div class="body">
-
-  <!-- Signal Banner -->
-  <div class="section-label">Overall Signal</div>
-  <div class="signal-banner" id="signalBanner">
-    <div class="signal-dot" id="signalDot" style="background:var(--dim)"></div>
-    <div class="signal-text" id="signalText">Loading macro data…</div>
-    <div class="signal-updated" id="signalUpdated"></div>
+<main>
+  <span class="lab">Overall signal</span>
+  <div class="card banner">
+    <div class="sig-dot" id="sigDot" style="background:var(--baseline)"></div>
+    <div class="sig-text" id="sigText">Loading macro data…</div>
+    <div class="sig-counts" id="sigCounts"></div>
   </div>
 
-  <!-- Sentiment -->
-  <div class="section-label">Sentiment &amp; Volatility</div>
-  <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr;align-items:start">
-    <!-- Fear & Greed -->
-    <div class="fng-card" id="fngCard">
-      <div class="fng-gauge-wrap">
-        <canvas class="fng-gauge" id="fngGauge" width="110" height="70"></canvas>
-      </div>
-      <div class="fng-info">
-        <div class="mc-label">Fear &amp; Greed</div>
+  <span class="lab">Sentiment &amp; volatility</span>
+  <div class="senti">
+    <div class="card fng-card">
+      <canvas class="fng-gauge" id="fngGauge"></canvas>
+      <div style="flex:1;min-width:0">
+        <div class="lab" style="margin:0 0 4px">Fear &amp; Greed</div>
         <div class="fng-value" id="fngValue">—</div>
         <div class="fng-label" id="fngLabel">—</div>
         <div class="fng-prev" id="fngPrev"></div>
-        <div class="fng-bar-bg"><div class="fng-bar" id="fngBar"></div></div>
+        <div class="fng-meter"><i id="fngBar"></i></div>
       </div>
     </div>
-    <!-- VIX / DXY stack -->
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <div class="metric-card" id="vixCard">
-        <div class="mc-label">VIX — Volatility Index</div>
-        <div class="mc-value" id="vixValue">—</div>
-        <div class="mc-change" id="vixChange"></div>
-        <div class="mc-sub" id="vixNote"></div>
+    <div class="vd-stack">
+      <div class="tile">
+        <div class="t-lab">VIX — volatility index</div>
+        <div class="t-val" id="vixValue">—</div>
+        <div class="t-chg" id="vixChange"></div>
+        <div class="t-sub" id="vixNote"></div>
       </div>
-      <div class="metric-card" id="dxyCard">
-        <div class="mc-label">DXY — US Dollar</div>
-        <div class="mc-value" id="dxyValue">—</div>
-        <div class="mc-change" id="dxyChange"></div>
-        <div class="mc-sub" id="dxyNote"></div>
+      <div class="tile">
+        <div class="t-lab">DXY — US dollar</div>
+        <div class="t-val" id="dxyValue">—</div>
+        <div class="t-chg" id="dxyChange"></div>
+        <div class="t-sub" id="dxyNote"></div>
       </div>
     </div>
   </div>
 
-  <!-- TradFi -->
-  <div class="section-label">Traditional Markets</div>
-  <div class="tradfi-grid">
-    <div class="tf-card">
-      <div class="tf-label">S&amp;P 500</div>
-      <div class="tf-value" id="spValue">—</div>
-      <div class="tf-change" id="spChange"></div>
-      <div class="tf-note">Crypto follows risk-on/off</div>
-    </div>
-    <div class="tf-card">
-      <div class="tf-label">Gold</div>
-      <div class="tf-value" id="goldValue">—</div>
-      <div class="tf-change" id="goldChange"></div>
-      <div class="tf-note">Risk-off hedge; sometimes leads BTC</div>
-    </div>
-    <div class="tf-card">
-      <div class="tf-label">DXY (detail)</div>
-      <div class="tf-value" id="dxyValue2">—</div>
-      <div class="tf-change" id="dxyChange2"></div>
-      <div class="tf-note">Inverse to crypto — DXY ↑ = crypto ↓</div>
-    </div>
-    <div class="tf-card">
-      <div class="tf-label">VIX (detail)</div>
-      <div class="tf-value" id="vixValue2">—</div>
-      <div class="tf-change" id="vixChange2"></div>
-      <div class="tf-note">&gt;25 risk-off · &gt;30 extreme caution</div>
-    </div>
+  <span class="lab">Traditional markets</span>
+  <div class="tf-grid">
+    <div class="tile"><div class="t-lab">S&amp;P 500</div>
+      <div class="t-val" id="spValue">—</div><div class="t-chg" id="spChange"></div>
+      <div class="t-sub">Crypto follows risk-on/off</div></div>
+    <div class="tile"><div class="t-lab">Gold</div>
+      <div class="t-val" id="goldValue">—</div><div class="t-chg" id="goldChange"></div>
+      <div class="t-sub">Risk-off hedge; sometimes leads BTC</div></div>
+    <div class="tile"><div class="t-lab">DXY detail</div>
+      <div class="t-val" id="dxyValue2">—</div><div class="t-chg" id="dxyChange2"></div>
+      <div class="t-sub">Inverse to crypto — DXY ↑ = crypto ↓</div></div>
+    <div class="tile"><div class="t-lab">VIX detail</div>
+      <div class="t-val" id="vixValue2">—</div><div class="t-chg" id="vixChange2"></div>
+      <div class="t-sub">&gt;25 risk-off · &gt;30 extreme caution</div></div>
   </div>
 
-  <!-- Dominance -->
-  <div class="section-label">Market-Cap Dominance</div>
-  <div class="dom-card">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px">
-      <div style="font-size:13px;font-weight:700" id="domHeadline">—</div>
+  <span class="lab">Market-cap dominance</span>
+  <div class="card dom-card">
+    <div class="dom-head">
+      <div class="dom-title" id="domHeadline">—</div>
       <div class="dom-mcap" id="domMcap"></div>
     </div>
-    <div class="dom-bar" id="domBar">
+    <div class="dom-bar">
       <div class="dom-seg dom-btc" id="domBtcSeg" style="flex:0"><span></span></div>
       <div class="dom-seg dom-eth" id="domEthSeg" style="flex:0"><span></span></div>
       <div class="dom-seg dom-alt" id="domAltSeg" style="flex:0"><span></span></div>
     </div>
     <div class="dom-legend">
-      <div class="dom-legend-item">
-        <div class="dom-dot" style="background:#F7931A"></div>
-        <span>BTC <b id="domBtcPct">—</b></span>
-      </div>
-      <div class="dom-legend-item">
-        <div class="dom-dot" style="background:#627EEA"></div>
-        <span>ETH <b id="domEthPct">—</b></span>
-      </div>
-      <div class="dom-legend-item">
-        <div class="dom-dot" style="background:#3a4a5e"></div>
-        <span>Alts <b id="domAltPct">—</b></span>
-      </div>
-      <div class="dom-legend-item" id="domSignalBadge"></div>
+      <span><span class="sw" style="background:#F7931A"></span>BTC <b id="domBtcPct">—</b></span>
+      <span><span class="sw" style="background:#627EEA"></span>ETH <b id="domEthPct">—</b></span>
+      <span><span class="sw" style="background:var(--baseline)"></span>Alts <b id="domAltPct">—</b></span>
     </div>
   </div>
 
-  <!-- Market Structure -->
-  <div class="section-label">Derivatives Market Structure</div>
-  <div class="table-wrap">
-    <table id="structTable">
-      <thead>
-        <tr>
-          <th data-col="coin">Coin <span class="sort-arrow">↕</span></th>
-          <th data-col="fund">Funding/8h <span class="sort-arrow">↕</span></th>
-          <th data-col="oi">Open Interest <span class="sort-arrow">↕</span></th>
-          <th data-col="oichg">OI 1h Δ <span class="sort-arrow">↕</span></th>
-          <th data-col="ls">Long / Short</th>
-          <th data-col="longpct">Long % <span class="sort-arrow">↕</span></th>
-        </tr>
-      </thead>
+  <span class="lab">Derivatives market structure</span>
+  <div class="card tbl-wrap">
+    <table class="tbl" id="structTable">
+      <thead><tr>
+        <th data-col="coin">Coin <span class="arr">↕</span></th>
+        <th data-col="fund">Funding/8h <span class="arr">↕</span></th>
+        <th data-col="oi">Open interest <span class="arr">↕</span></th>
+        <th data-col="oichg">OI 1h Δ <span class="arr">↕</span></th>
+        <th data-col="ls">Long / short</th>
+        <th data-col="longpct">Long % <span class="arr">↕</span></th>
+      </tr></thead>
       <tbody id="structBody">
-        <tr><td colspan="6" class="spinner">Loading…</td></tr>
+        <tr><td colspan="6" class="modal-loading">Loading…</td></tr>
       </tbody>
     </table>
   </div>
+</main>
 
-</div><!-- /body -->
-
+<script src="/assets/app.js"></script>
 <script>
-const CSRF = (document.querySelector('meta[name=csrf-token]')||{}).content||'';
-function hdrs(x){
-  const h=Object.assign({'X-CSRF-Token':CSRF},x||{});
-  const t=localStorage.getItem('minisim_token');if(t)h['X-Auth-Token']=t;return h;
-}
-async function api(url,o){
-  o=o||{};o.headers=hdrs(o.headers);
-  const r=await fetch(url,o);
-  if(r.status===401){const t=prompt('Token:');if(t){localStorage.setItem('minisim_token',t);}}
-  return r;
-}
-
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmtN=(n,d=2)=>n==null?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
-const fmtChg=(v,suffix='%')=>`${v>=0?'+':''}${Number(v).toFixed(2)}${suffix}`;
+const {esc,api,fmtPrice,coinDot,COIN_COLORS}=MS;
+const fmtChg=(v,s='%')=>`${v>=0?'+':''}${Number(v).toFixed(2)}${s}`;
 const clsChg=v=>v>0?'up':v<0?'dn':'dim';
+const T=MS.tok();
+const vixColor=v=>v>30?T.dn:v>25?T.warn:T.muted;
+const dxyColor=c=>c>0.4?T.dn:c<-0.4?T.up:T.muted;
+const fundColor=f=>f>0.05?T.dn:f>0.02?T.warn:f<-0.03?T.up:T.muted;
+const lsColor=lp=>lp>70?T.dn:lp<35?T.up:T.muted;
 
-const COIN_COLORS={
-  BTC:'#F7931A',ETH:'#627EEA',XRP:'#346AA9',ADA:'#0033AD',SOL:'#9945FF',
-  BNB:'#F3BA2F',DOGE:'#C2A633',AVAX:'#E84142',DOT:'#E6007A',LINK:'#2A5ADA',
-  LTC:'#345D9D',NEAR:'#00C08B',UNI:'#FF007A',ARB:'#28A0F0',ATOM:'#2E3148'
-};
-
-/* ── Fear & Greed gauge ── */
-function drawGauge(cv, value) {
-  if (!cv) return;
-  const dpr = window.devicePixelRatio || 1;
-  const W = 110 * dpr, H = 70 * dpr;
-  cv.width = W; cv.height = H;
-  const ctx = cv.getContext('2d');
-  const cx = W / 2, cy = H * 0.88;
-  const r = W * 0.40;
-  const lw = 9 * dpr;
-
-  // Coloured arc segments (5 × 36°)
-  const segs = [
-    {col:'#f85149', from: Math.PI,          to: Math.PI * 1.2},
-    {col:'#d97b1e', from: Math.PI * 1.2,    to: Math.PI * 1.4},
-    {col:'#d29922', from: Math.PI * 1.4,    to: Math.PI * 1.6},
-    {col:'#5da854', from: Math.PI * 1.6,    to: Math.PI * 1.8},
-    {col:'#3fb950', from: Math.PI * 1.8,    to: Math.PI * 2.0},
-  ];
-  segs.forEach(s => {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, s.from, s.to);
-    ctx.strokeStyle = s.col;
-    ctx.lineWidth = lw;
-    ctx.lineCap = 'butt';
-    ctx.stroke();
-  });
-
-  // Needle
-  const angle = Math.PI + (Math.max(0, Math.min(100, value)) / 100) * Math.PI;
-  const nl = r - lw;
-  ctx.beginPath();
-  ctx.moveTo(cx - Math.cos(angle) * 5 * dpr, cy - Math.sin(angle) * 5 * dpr);
-  ctx.lineTo(cx + Math.cos(angle) * nl, cy + Math.sin(angle) * nl);
-  ctx.strokeStyle = '#e6edf3';
-  ctx.lineWidth = 2.5 * dpr;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  // Centre dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, 4 * dpr, 0, Math.PI * 2);
-  ctx.fillStyle = '#e6edf3';
-  ctx.fill();
+function synthesiseSignal(d){
+  const fv=d.fear_greed?.value??50;
+  const vix=d.tradfi?.vix?.price??0;
+  const dxyC=d.tradfi?.dxy?.change_pct??0;
+  const btcD=d.dominance?.btc_dominance??50;
+  const btcL=(d.long_short_ratio?.BTC?.long_pct??0.5)*100;
+  const avgF=d.avg_funding_pct??0;
+  const spC=d.tradfi?.sp500?.change_pct??0;
+  let bear=0,bull=0;const notes=[];
+  if(fv<=20){bull+=2;notes.push(`Extreme Fear ${fv} (contrarian buy)`);}
+  else if(fv<=40){bull+=1;notes.push(`Fear ${fv}`);}
+  else if(fv>=80){bear+=2;notes.push(`Extreme Greed ${fv} (contrarian sell)`);}
+  else if(fv>=60){bear+=1;notes.push(`Greed ${fv}`);}
+  if(vix>30){bear+=2;notes.push(`VIX extreme (${vix.toFixed(1)})`);}
+  else if(vix>25){bear+=1;notes.push(`VIX elevated (${vix.toFixed(1)})`);}
+  if(dxyC>0.5){bear+=1;notes.push(`DXY rising (${fmtChg(dxyC)})`);}
+  else if(dxyC<-0.5){bull+=1;notes.push(`DXY falling (${fmtChg(dxyC)})`);}
+  if(btcL>70){bear+=1;notes.push(`BTC longs crowded (${btcL.toFixed(0)}%)`);}
+  else if(btcL<35){bull+=1;notes.push(`BTC shorts crowded (${btcL.toFixed(0)}%L)`);}
+  if(avgF>0.08){bear+=1;notes.push(`High funding (${fmtChg(avgF)})`);}
+  else if(avgF<-0.04){bull+=1;notes.push('Negative funding');}
+  if(spC<-1.5){bear+=1;notes.push(`S&P500 down ${fmtChg(spC)}`);}
+  else if(spC>1.5){bull+=1;notes.push(`S&P500 up ${fmtChg(spC)}`);}
+  if(btcD>=58){bear+=1;notes.push(`BTC season (dom ${btcD.toFixed(1)}%)`);}
+  else if(btcD<=48){bull+=1;notes.push(`Alt season (BTC dom ${btcD.toFixed(1)}%)`);}
+  const bias=bear>bull+1?'bearish':bull>bear+1?'bullish':'neutral';
+  return{bias,notes,bear,bull};
 }
 
-/* ── colour helpers ── */
-function fngColor(v) {
-  return v <= 24 ? '#f85149' : v <= 44 ? '#d97b1e' : v <= 54 ? '#d29922' : v <= 74 ? '#5da854' : '#3fb950';
+let _sortCol='oi',_sortDir=-1,_lastData=null;
+function sortTable(col){
+  if(_sortCol===col)_sortDir*=-1;else{_sortCol=col;_sortDir=-1;}
+  document.querySelectorAll('thead th').forEach(th=>
+    th.classList.toggle('sorted',th.dataset.col===col));
+  if(_lastData)renderTable(_lastData);
 }
-function vixColor(v)  { return v > 30 ? '#f85149' : v > 25 ? '#d29922' : '#8b98a9'; }
-function dxyColor(c)  { return c > 0.4 ? '#f85149' : c < -0.4 ? '#3fb950' : '#8b98a9'; }
-function fundColor(f) { return f > 0.05 ? '#f85149' : f > 0.02 ? '#d29922' : f < -0.03 ? '#3fb950' : '#8b98a9'; }
-function lsColor(lp)  { return lp > 70 ? '#f85149' : lp < 35 ? '#3fb950' : '#8b98a9'; }
+document.querySelectorAll('thead th[data-col]').forEach(th=>
+  th.addEventListener('click',()=>sortTable(th.dataset.col)));
 
-/* ── overall signal synthesis ── */
-function synthesiseSignal(d) {
-  const fv   = d.fear_greed?.value ?? 50;
-  const vix  = d.tradfi?.vix?.price ?? 0;
-  const dxyC = d.tradfi?.dxy?.change_pct ?? 0;
-  const btcD = d.dominance?.btc_dominance ?? 50;
-  const btcL = (d.long_short_ratio?.BTC?.long_pct ?? 0.5) * 100;
-  const avgF = d.avg_funding_pct ?? 0;
-  const spC  = d.tradfi?.sp500?.change_pct ?? 0;
+function render(d){
+  _lastData=d;
+  const fng=d.fear_greed||{},dom=d.dominance||{},tf=d.tradfi||{};
 
-  let bearPoints = 0, bullPoints = 0;
-  const notes = [];
+  const sig=synthesiseSignal(d);
+  const sigCol=sig.bias==='bearish'?T.dn:sig.bias==='bullish'?T.up:T.warn;
+  const dot=document.getElementById('sigDot');
+  dot.style.background=sigCol;dot.style.boxShadow=`0 0 8px ${sigCol}`;
+  document.getElementById('sigText').innerHTML=
+    `<b style="color:${sigCol}">${sig.bias.toUpperCase()}</b>&ensp;`+
+    sig.notes.map(n=>esc(n)).join(' · ');
+  document.getElementById('sigCounts').innerHTML=
+    `Bear signals <b>${sig.bear}</b><br>Bull signals <b>${sig.bull}</b>`;
 
-  // F&G
-  if (fv <= 20) { bullPoints += 2; notes.push(`Extreme Fear ${fv} (contrarian buy)`); }
-  else if (fv <= 40) { bullPoints += 1; notes.push(`Fear ${fv}`); }
-  else if (fv >= 80) { bearPoints += 2; notes.push(`Extreme Greed ${fv} (contrarian sell)`); }
-  else if (fv >= 60) { bearPoints += 1; notes.push(`Greed ${fv}`); }
+  const fv=fng.value??50,fc=MS.fngColor(fv);
+  MS.drawGauge(document.getElementById('fngGauge'),fv);
+  const fe=document.getElementById('fngValue');fe.textContent=fv;fe.style.color=fc;
+  const fl=document.getElementById('fngLabel');fl.textContent=fng.label||'—';fl.style.color=fc;
+  document.getElementById('fngPrev').textContent=fng.previous!=null?`Yesterday: ${fng.previous}`:'';
+  const fb=document.getElementById('fngBar');fb.style.width=fv+'%';fb.style.background=fc;
 
-  // VIX
-  if (vix > 30) { bearPoints += 2; notes.push(`VIX extreme (${vix.toFixed(1)})`); }
-  else if (vix > 25) { bearPoints += 1; notes.push(`VIX elevated (${vix.toFixed(1)})`); }
+  const vix=tf.vix||{},vc=vixColor(vix.price||0);
+  const ve=document.getElementById('vixValue');
+  ve.textContent=vix.price?.toFixed(1)??'—';ve.style.color=vc;
+  if(vix.change_pct!=null){const e=document.getElementById('vixChange');
+    e.textContent=fmtChg(vix.change_pct);e.className='t-chg '+clsChg(vix.change_pct);}
+  document.getElementById('vixNote').textContent=
+    vix.price>30?'⚠ Extreme — risk-off, avoid longs':
+    vix.price>25?'⚠ Elevated — reduce position size':
+    vix.price>18?'Calm markets':'Very calm';
 
-  // DXY
-  if (dxyC > 0.5) { bearPoints += 1; notes.push(`DXY rising (${fmtChg(dxyC)})`); }
-  else if (dxyC < -0.5) { bullPoints += 1; notes.push(`DXY falling (${fmtChg(dxyC)})`); }
+  const dxy=tf.dxy||{},dcl=dxyColor(dxy.change_pct||0);
+  const de=document.getElementById('dxyValue');
+  de.textContent=dxy.price?.toFixed(2)??'—';de.style.color=dcl;
+  if(dxy.change_pct!=null){const e=document.getElementById('dxyChange');
+    e.textContent=fmtChg(dxy.change_pct);e.className='t-chg '+clsChg(-dxy.change_pct);}
+  document.getElementById('dxyNote').textContent=
+    (dxy.change_pct||0)>0.5?'⚠ Rising — crypto headwind':
+    (dxy.change_pct||0)<-0.5?'✓ Falling — crypto tailwind':'Neutral';
 
-  // L/S crowding
-  if (btcL > 70) { bearPoints += 1; notes.push(`BTC longs crowded (${btcL.toFixed(0)}%)`); }
-  else if (btcL < 35) { bullPoints += 1; notes.push(`BTC shorts crowded (${btcL.toFixed(0)}%L)`); }
-
-  // Funding
-  if (avgF > 0.08) { bearPoints += 1; notes.push(`High funding (${fmtChg(avgF)})`); }
-  else if (avgF < -0.04) { bullPoints += 1; notes.push(`Negative funding`); }
-
-  // S&P
-  if (spC < -1.5) { bearPoints += 1; notes.push(`S&P500 down ${fmtChg(spC)}`); }
-  else if (spC > 1.5) { bullPoints += 1; notes.push(`S&P500 up ${fmtChg(spC)}`); }
-
-  // BTC dominance
-  if (btcD >= 58) { bearPoints += 1; notes.push(`BTC season (dom ${btcD.toFixed(1)}%)`); }
-  else if (btcD <= 48) { bullPoints += 1; notes.push(`Alt season (BTC dom ${btcD.toFixed(1)}%)`); }
-
-  const bias = bearPoints > bullPoints + 1 ? 'bearish'
-             : bullPoints > bearPoints + 1 ? 'bullish'
-             : 'neutral';
-  return { bias, notes, bearPoints, bullPoints };
-}
-
-/* ── sort state ── */
-let _sortCol = 'oi', _sortDir = -1;
-let _lastData = null;
-
-function sortTable(col) {
-  if (_sortCol === col) _sortDir *= -1;
-  else { _sortCol = col; _sortDir = -1; }
-  document.querySelectorAll('thead th').forEach(th => {
-    th.classList.toggle('sorted', th.dataset.col === col);
-  });
-  if (_lastData) renderTable(_lastData);
-}
-document.querySelectorAll('thead th[data-col]').forEach(th => {
-  th.addEventListener('click', () => sortTable(th.dataset.col));
-});
-
-/* ── RENDER ── */
-function render(d) {
-  _lastData = d;
-  const fng    = d.fear_greed || {};
-  const dom    = d.dominance  || {};
-  const tf     = d.tradfi     || {};
-  const oi     = d.open_interest     || {};
-  const ls     = d.long_short_ratio  || {};
-  const fund   = d.funding_rates     || {};
-
-  /* Signal banner */
-  const sig = synthesiseSignal(d);
-  const sigDot = document.getElementById('signalDot');
-  const sigText = document.getElementById('signalText');
-  const sigUpd  = document.getElementById('signalUpdated');
-  const sigCol  = sig.bias === 'bearish' ? '#f85149' : sig.bias === 'bullish' ? '#3fb950' : '#d29922';
-  sigDot.style.background = sigCol;
-  sigDot.style.boxShadow  = `0 0 8px ${sigCol}`;
-  sigText.innerHTML = `<b style="color:${sigCol}">${sig.bias.toUpperCase()}</b> &nbsp;`
-    + sig.notes.map(n => `<span style="color:var(--dim)">${esc(n)}</span>`).join(' · ');
-  sigUpd.innerHTML = `Bear signals: <b>${sig.bearPoints}</b><br>Bull signals: <b>${sig.bullPoints}</b>`;
-
-  /* Fear & Greed */
-  const fv = fng.value ?? 50;
-  const fc = fngColor(fv);
-  drawGauge(document.getElementById('fngGauge'), fv);
-  document.getElementById('fngValue').textContent = fv;
-  document.getElementById('fngValue').style.color = fc;
-  document.getElementById('fngLabel').textContent = fng.label || '—';
-  document.getElementById('fngLabel').style.color = fc;
-  document.getElementById('fngPrev').textContent = fng.previous != null
-    ? `Yesterday: ${fng.previous}` : '';
-  const bar = document.getElementById('fngBar');
-  bar.style.width = fv + '%';
-  bar.style.background = fc;
-
-  /* VIX */
-  const vix = tf.vix || {};
-  const vc  = vixColor(vix.price || 0);
-  document.getElementById('vixValue').textContent = vix.price?.toFixed(1) ?? '—';
-  document.getElementById('vixValue').style.color = vc;
-  const vChEl = document.getElementById('vixChange');
-  if (vix.change_pct != null) {
-    vChEl.textContent = fmtChg(vix.change_pct);
-    vChEl.className = 'mc-change ' + clsChg(vix.change_pct);
+  function setTf(valId,chgId,obj,invert){
+    const el=document.getElementById(valId),cc=document.getElementById(chgId);
+    if(!el||!obj)return;
+    el.textContent=obj.price!=null?obj.price.toLocaleString(undefined,{maximumFractionDigits:2}):'—';
+    if(obj.change_pct!=null){cc.textContent=fmtChg(obj.change_pct);
+      cc.className='t-chg '+(invert?clsChg(-obj.change_pct):clsChg(obj.change_pct));}
   }
-  document.getElementById('vixNote').textContent =
-    vix.price > 30 ? '⚠ Extreme — risk-off, avoid longs' :
-    vix.price > 25 ? '⚠ Elevated — reduce position size' :
-    vix.price > 18 ? 'Calm markets' : 'Very calm';
+  setTf('spValue','spChange',tf.sp500,false);
+  setTf('goldValue','goldChange',tf.gold,false);
+  setTf('dxyValue2','dxyChange2',tf.dxy,true);
+  setTf('vixValue2','vixChange2',tf.vix,true);
 
-  /* DXY (summary card) */
-  const dxy = tf.dxy || {};
-  const dc  = dxyColor(dxy.change_pct || 0);
-  document.getElementById('dxyValue').textContent = dxy.price?.toFixed(2) ?? '—';
-  document.getElementById('dxyValue').style.color = dc;
-  const dChEl = document.getElementById('dxyChange');
-  if (dxy.change_pct != null) {
-    dChEl.textContent = fmtChg(dxy.change_pct);
-    dChEl.className = 'mc-change ' + clsChg(-dxy.change_pct); // inverted for crypto
+  const btcD=dom.btc_dominance||0,ethD=dom.eth_dominance||0,altD=dom.alt_dominance||0;
+  const domSig=btcD>=58?'BTC season — alts lagging':btcD<=48&&btcD>0?'Alt season — alts outperforming':'Transitional';
+  const domCol=btcD>=58?T.warn:btcD<=48&&btcD>0?T.up:T.muted;
+  document.getElementById('domHeadline').innerHTML=`<span style="color:${domCol}">${esc(domSig)}</span>`;
+  if(dom.total_mcap_usd){
+    const tc=dom.total_mcap_usd/1e12,mc=dom.mcap_change_24h_pct??0;
+    document.getElementById('domMcap').innerHTML=
+      `Total mcap <b style="color:var(--ink2)">$${tc.toFixed(2)}T</b> <span class="${clsChg(mc)}">${fmtChg(mc)}</span> 24h`;
   }
-  document.getElementById('dxyNote').textContent =
-    (dxy.change_pct || 0) > 0.5 ? '⚠ Rising — crypto headwind' :
-    (dxy.change_pct || 0) < -0.5 ? '✓ Falling — crypto tailwind' : 'Neutral';
-
-  /* TradFi cards */
-  function setTf(valId, chgId, obj, invert) {
-    const el = document.getElementById(valId);
-    const cc = document.getElementById(chgId);
-    if (!el || !obj) return;
-    el.textContent = obj.price != null ? obj.price.toLocaleString(undefined, {maximumFractionDigits: 2}) : '—';
-    if (obj.change_pct != null) {
-      cc.textContent = fmtChg(obj.change_pct);
-      cc.className = 'tf-change ' + (invert ? clsChg(-obj.change_pct) : clsChg(obj.change_pct));
-    }
-  }
-  setTf('spValue',   'spChange',   tf.sp500, false);
-  setTf('goldValue', 'goldChange', tf.gold,  false);
-  setTf('dxyValue2', 'dxyChange2', tf.dxy,   true);
-  setTf('vixValue2', 'vixChange2', tf.vix,   true);
-
-  /* Dominance bar */
-  const btcD = dom.btc_dominance || 0;
-  const ethD = dom.eth_dominance || 0;
-  const altD = dom.alt_dominance || 0;
-  const domSig = btcD >= 58 ? 'BTC Season — alts lagging' :
-                 btcD <= 48 ? 'Alt Season — alts outperforming' : 'Transitional';
-  const domSigCol = btcD >= 58 ? '#d29922' : btcD <= 48 ? '#3fb950' : '#8b98a9';
-  document.getElementById('domHeadline').innerHTML =
-    `<span style="color:${domSigCol}">${esc(domSig)}</span>`;
-  if (dom.total_mcap_usd) {
-    const tc = dom.total_mcap_usd / 1e12;
-    const mc = dom.mcap_change_24h_pct ?? 0;
-    document.getElementById('domMcap').innerHTML =
-      `Total market cap: <b>$${tc.toFixed(2)}T</b> &nbsp;`
-      + `<span class="${clsChg(mc)}">${fmtChg(mc)}</span> 24h`;
-  }
-  document.getElementById('domBtcSeg').style.flex  = btcD;
-  document.getElementById('domBtcSeg').querySelector('span').textContent = btcD ? `BTC ${btcD.toFixed(1)}%` : '';
-  document.getElementById('domEthSeg').style.flex  = ethD;
-  document.getElementById('domEthSeg').querySelector('span').textContent = ethD ? `ETH ${ethD.toFixed(1)}%` : '';
-  document.getElementById('domAltSeg').style.flex  = altD;
-  document.getElementById('domAltSeg').querySelector('span').textContent = altD ? `Alts ${altD.toFixed(1)}%` : '';
-  document.getElementById('domBtcPct').textContent = btcD ? btcD.toFixed(2) + '%' : '—';
-  document.getElementById('domEthPct').textContent = ethD ? ethD.toFixed(2) + '%' : '—';
-  document.getElementById('domAltPct').textContent = altD ? altD.toFixed(2) + '%' : '—';
-  document.getElementById('domSignalBadge').innerHTML =
-    `<span style="font-size:10px;color:${domSigCol}">${esc(domSig)}</span>`;
+  const seg=(id,v,lbl)=>{const e=document.getElementById(id);
+    e.style.flex=v;e.querySelector('span').textContent=v>6?`${lbl} ${v.toFixed(1)}%`:'';};
+  seg('domBtcSeg',btcD,'BTC');seg('domEthSeg',ethD,'ETH');seg('domAltSeg',altD,'Alts');
+  document.getElementById('domBtcPct').textContent=btcD?btcD.toFixed(2)+'%':'—';
+  document.getElementById('domEthPct').textContent=ethD?ethD.toFixed(2)+'%':'—';
+  document.getElementById('domAltPct').textContent=altD?altD.toFixed(2)+'%':'—';
 
   renderTable(d);
-
-  /* Timestamp */
-  const now = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  document.getElementById('updStamp').textContent = `↻ ${now}`;
+  document.getElementById('updStamp').textContent=
+    '↻ '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
-function renderTable(d) {
-  const oi   = d.open_interest    || {};
-  const ls   = d.long_short_ratio || {};
-  const fund = d.funding_rates    || {};
-  const COINS = Object.keys(COIN_COLORS);
-
-  let rows = COINS.map(coin => {
-    const oiD = oi[coin]   || {};
-    const lsD = ls[coin]   || {};
-    const fr  = (fund[coin] || 0) * 100;
-    const oiU = oiD.oi_usd || 0;
-    const oiC = oiD.oi_change_pct || 0;
-    const lp  = (lsD.long_pct || 0.5) * 100;
-    return { coin, fr, oiU, oiC, lp };
+function renderTable(d){
+  const oi=d.open_interest||{},ls=d.long_short_ratio||{},fund=d.funding_rates||{};
+  let rows=Object.keys(COIN_COLORS).map(coin=>{
+    const oiD=oi[coin]||{},lsD=ls[coin]||{};
+    return{coin,fr:(fund[coin]||0)*100,oiU:oiD.oi_usd||0,
+           oiC:oiD.oi_change_pct||0,lp:(lsD.long_pct||0.5)*100};
   });
-
-  // Sort
-  const multiplier = _sortDir;
-  rows.sort((a, b) => {
-    const map = { coin: r => r.coin, fund: r => r.fr, oi: r => r.oiU,
-                  oichg: r => r.oiC, longpct: r => r.lp };
-    const fn = map[_sortCol] || (r => r.oiU);
-    const av = fn(a), bv = fn(b);
-    return typeof av === 'string' ? av.localeCompare(bv) * multiplier : (av - bv) * multiplier;
+  rows.sort((a,b)=>{
+    const map={coin:r=>r.coin,fund:r=>r.fr,oi:r=>r.oiU,oichg:r=>r.oiC,longpct:r=>r.lp};
+    const fn=map[_sortCol]||(r=>r.oiU);
+    const av=fn(a),bv=fn(b);
+    return typeof av==='string'?av.localeCompare(bv)*_sortDir:(av-bv)*_sortDir;
   });
-
-  const tbody = document.getElementById('structBody');
-  tbody.innerHTML = rows.map(({coin, fr, oiU, oiC, lp}) => {
-    const color  = COIN_COLORS[coin] || '#8b98a9';
-    const frCol  = fundColor(fr);
-    const frSign = fr >= 0 ? '+' : '';
-    const oiB    = oiU / 1e9;
-    const oiCls  = oiC > 0 ? 'up' : oiC < 0 ? 'dn' : 'dim';
-    const lsCol  = lsColor(lp);
-    const lsW    = Math.round(lp);
-    return `<tr>
-      <td><div class="coin-cell">
-        <div class="coin-dot" style="background:${color}">${esc(coin.slice(0,2))}</div>
-        <span class="coin-name">${esc(coin)}</span>
-      </div></td>
-      <td><span class="num" style="color:${frCol};font-weight:600">${frSign}${fr.toFixed(4)}%</span></td>
-      <td><span class="num">${oiB > 0 ? '$' + oiB.toFixed(2) + 'B' : '—'}</span></td>
-      <td><span class="num ${oiCls}">${oiC !== 0 ? fmtChg(oiC) : '—'}</span></td>
-      <td>
-        <div class="ls-bar-wrap">
-          <div class="ls-long" style="width:${lsW}%;background:${lsCol}"></div>
-          <div class="ls-short"></div>
-        </div>
-        <div class="ls-pct">${lp > 0 ? lp.toFixed(1) + '%L / ' + (100-lp).toFixed(1) + '%S' : '—'}</div>
-      </td>
-      <td><span class="num" style="color:${lsCol};font-weight:600">${lp > 0 ? lp.toFixed(1) + '%' : '—'}</span></td>
-    </tr>`;
-  }).join('');
+  document.getElementById('structBody').innerHTML=rows.map(({coin,fr,oiU,oiC,lp})=>{
+    const frCol=fundColor(fr),oiB=oiU/1e9;
+    const lsCol=lsColor(lp);
+    return`<tr>
+      <td><span style="display:inline-flex;align-items:center;gap:7px">${coinDot(coin,22)}<b>${esc(coin)}</b></span></td>
+      <td><span class="num" style="color:${frCol};font-weight:600">${fr>=0?'+':''}${fr.toFixed(4)}%</span></td>
+      <td><span class="num">${oiB>0?'$'+oiB.toFixed(2)+'B':'—'}</span></td>
+      <td><span class="num ${oiC>0?'up':oiC<0?'dn':'dim'}">${oiC!==0?fmtChg(oiC):'—'}</span></td>
+      <td><div class="ls-track"><i style="width:${Math.round(lp)}%;background:${lsCol}"></i></div>
+          <div class="ls-pct">${lp>0?lp.toFixed(1)+'%L / '+(100-lp).toFixed(1)+'%S':'—'}</div></td>
+      <td><span class="num" style="color:${lsCol};font-weight:600">${lp>0?lp.toFixed(1)+'%':'—'}</span></td>
+    </tr>`;}).join('');
 }
 
-async function load() {
-  try {
-    const r = await api('/api/macro');
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    render(d);
-  } catch (e) {
-    document.getElementById('signalText').textContent = 'Failed to load macro data — ' + e;
+async function load(){
+  try{
+    const r=await api('/api/macro');
+    if(!r.ok)throw new Error(r.status);
+    render(await r.json());
+  }catch(e){
+    document.getElementById('sigText').textContent='Failed to load macro data — '+e;
   }
 }
-
-load();
-setInterval(load, 60000);
+load();setInterval(load,60000);
 </script>
 </body>
 </html>

@@ -26,34 +26,29 @@ MIN_SECS     = 900    # never re-run more frequently than 15 min
 
 
 # ── Performance summary ───────────────────────────────────────────────────────
-def _strategy_performance(decision_log_path: str | None = None) -> dict:
+def _strategy_performance() -> dict:
     """
-    Read closed trades from the decision log and compute per-strategy stats.
+    Compute per-strategy stats from FIFO-matched closed trades in the tax
+    ledger (entries carry a 'strategy' tag since v7 — the old decision-log
+    scan looked for a pnl_usd field that nothing ever wrote).
     Returns: {strategy_name: {trades, wins, pnl_usd, win_rate, recent_n}}
     """
-    from config import config
-    path = decision_log_path or getattr(config, "DECISION_LOG", None)
     perf: dict = {name: {"trades": 0, "wins": 0, "pnl_usd": 0.0} for name in REGISTRY}
 
-    if not path or not os.path.exists(path):
-        return {n: {**v, "win_rate": 0.0, "recent_n": 0} for n, v in perf.items()}
-
     try:
-        from common import read_jsonl
-        records = read_jsonl(path, limit=500)
+        from records.performance import recent_closed_trades
+        closed = recent_closed_trades(500)
     except Exception:
-        records = []
+        closed = []
 
-    for r in records:
-        strat = r.get("strategy")
+    for t in closed:
+        strat = t.get("strategy")
         if strat not in perf:
             continue
-        if r.get("action") not in ("ENTRY_BUY", "ENTRY_SELL"):
-            continue
-        pnl = r.get("pnl_usd", 0.0) or 0.0
+        pnl_usd = t["qty"] * t["open_price"] * t["pnl_pct"] / 100
         perf[strat]["trades"] += 1
-        perf[strat]["pnl_usd"] = round(perf[strat]["pnl_usd"] + pnl, 4)
-        if pnl > 0:
+        perf[strat]["pnl_usd"] = round(perf[strat]["pnl_usd"] + pnl_usd, 4)
+        if t["pnl_pct"] > 0:
             perf[strat]["wins"] += 1
 
     for name, p in perf.items():
@@ -221,9 +216,12 @@ Respond with JSON containing:
     }
 
     try:
-        result = chat_json(sysmsg, user, schema_keys=tuple(schema["properties"].keys()))
-        # Validate returned names are real
-        valid = [n for n in result.get("active_strategies", []) if n in REGISTRY]
+        # v7 chat_json supports schema= natively: the full JSON schema is
+        # embedded in the prompt guard and its 'required' keys are guaranteed
+        # present in the result (supersedes the v6 schema_keys hotfix).
+        result = chat_json(sysmsg, user, schema=schema)
+        # Validate returned names are real (None/malformed output → default)
+        valid = [n for n in (result.get("active_strategies") or []) if n in REGISTRY]
         if not valid:
             valid = ["RangeScalp"]
         result["active_strategies"] = valid

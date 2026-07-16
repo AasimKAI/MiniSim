@@ -1,7 +1,7 @@
 """Lightweight schema validation at module boundaries. No external deps."""
 
 VERDICTS = {"bullish", "bearish", "neutral"}
-ACTIONS = {"ENTRY_BUY", "ENTRY_SELL", "STAND_DOWN", "EXIT"}
+ACTIONS = {"ENTRY_BUY", "ENTRY_SELL", "STAND_DOWN", "EXIT", "COVER"}
 
 class SchemaError(ValueError):
     pass

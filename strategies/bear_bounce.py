@@ -52,7 +52,8 @@ class OversoldBounce(Strategy):
 
         # Hard gate: RSI must be oversold — no LLM cost otherwise
         if r is None or r >= 30:
-            return Signal("HOLD", 0.0, f"RSI={r:.0f if r else '?'} not oversold", self.name)
+            rtxt = f"{r:.0f}" if r is not None else "?"
+            return Signal("HOLD", 0.0, f"RSI={rtxt} not oversold", self.name)
 
         score   = 0
         reasons = []

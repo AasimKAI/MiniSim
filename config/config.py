@@ -1,5 +1,5 @@
 """
-MiniSim v6 — central configuration.
+MiniSim v7 — central configuration.
 
 Everything you might want to change lives here. Plain-English comments on
 each line so a non-developer can adjust safely.
@@ -30,6 +30,10 @@ VOLUME_SCAN_INTERVAL = 45
 MARKET_CACHE_SEC = 600
 # Exit watch loop (seconds) — how often open positions are checked for stop-loss/TP.
 EXIT_WATCH_INTERVAL = 30
+# Max age of the mark price used for exits and paper fills (seconds).
+# Separate from MARKET_CACHE_SEC: the think-cycle can run on a 10-minute
+# vintage, but a stop-loss checked every 30s must see a fresh price.
+MARK_PRICE_MAX_AGE_SEC = 20
 # Candle timeframe passed to the Binance klines API.
 # 15m gives cleaner signals and matches the ~22 min analysis cadence.
 CANDLE_INTERVAL = "15m"
@@ -64,9 +68,27 @@ TRAILING_STOP_PERCENT = 3.0
 MAX_HOLD_TIME_HOURS = 48
 MIN_ORDER_NOTIONAL_USD = 6.0          # Binance spot min is $5; 6 gives a small buffer
 
+# Paper-trading realism: simulated taker fee and slippage on every paper fill.
+# Binance spot taker fee is 0.10% (0.075% with BNB discount). Without these the
+# simulator reports frictionless P&L that live trading cannot reproduce.
+PAPER_FEE_PCT = 0.001            # 0.1% of notional per fill
+PAPER_SLIPPAGE_BPS = 2.0         # 2 bps adverse price move per market order
+
 # Futures shorts (USDM perpetual, testnet.binancefuture.com)
 FUTURES_LEVERAGE    = 1            # 1x = no leverage; increase only deliberately
 FUTURES_MARGIN_TYPE = "ISOLATED"   # ISOLATED is safer than CROSS for automated trading
+
+# Which venue executes real SHORT/COVER orders when futures credentials exist.
+#   binance     -> USDM perps (UK retail accounts cannot obtain futures keys)
+#   hyperliquid -> perp DEX via ccxt, USDC-settled, has a public testnet.
+#                  UNVERIFIED against the live venue — run testnet first.
+FUTURES_BACKEND = os.environ.get("MINISIM_FUTURES_BACKEND", "binance")
+
+# Synthetic (paper-wallet) shorts accrue perpetual funding pro-rata against
+# the 8h period, settled to cash like a real perp: positive rate = longs pay
+# shorts (short RECEIVES), negative = short pays. Real futures positions
+# handle funding on the exchange, so this applies to paper shorts only.
+PAPER_FUNDING_ACCRUAL = True
 
 ROUTINE_SIGNAL_CONFIDENCE_MIN = 0.68   # raised from 0.65 — filters borderline entries
 STRONG_SIGNAL_CONFIDENCE_MIN = 0.80
@@ -142,8 +164,11 @@ KILL_SWITCH_FILE = os.path.join(STATE_DIR, "kill_switch.lock")
 
 DECISION_LOG = os.path.join(DATA_DIR, "decision_log.jsonl")
 TAX_LEDGER = os.path.join(DATA_DIR, "tax_ledger.jsonl")
+# Orders whose outcome is UNKNOWN (transport died mid-flight — may have filled)
+# are appended here for manual reconciliation against the exchange history.
+RECONCILIATION_LOG = os.path.join(DATA_DIR, "reconciliation.jsonl")
 POSITIONS_FILE = os.path.join(STATE_DIR, "positions.json")
 STATUS_FILE = os.path.join(STATE_DIR, "status.json")   # dashboards read this
 EQUITY_HISTORY_FILE = os.path.join(STATE_DIR, "equity_history.json")  # for the equity chart
 
-VERSION = "6.0.0"
+VERSION = "7.0.0"

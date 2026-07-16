@@ -3,8 +3,9 @@ Enforces a HARD exposure ceiling: the post-trade total can never exceed
 MAX_EXPOSURE_USD (fixes the cap-overshoot)."""
 from config import config
 
-def check(coin, action, price, balance, open_positions):
-    """Returns (quantity, decision, reason). quantity 0 => veto."""
+def check(coin, action, price, balance, open_positions, risk_mult=1.0):
+    """Returns (quantity, decision, reason). quantity 0 => veto.
+    risk_mult: router-selected sizing multiplier, clamped to [0.5, 2.0]."""
     if action not in ("ENTRY_BUY", "ENTRY_SELL"):
         return 0.0, "veto", "not an entry"
     if price <= 0:
@@ -14,7 +15,11 @@ def check(coin, action, price, balance, open_positions):
     room = config.MAX_EXPOSURE_USD - exposure
     if room <= 10:
         return 0.0, "veto", f"max exposure ${config.MAX_EXPOSURE_USD} reached (exp ${exposure:.0f})"
-    size_usd = min(config.POSITION_SIZE_USD, room)
+    try:
+        mult = max(0.5, min(2.0, float(risk_mult)))
+    except (TypeError, ValueError):
+        mult = 1.0
+    size_usd = min(config.POSITION_SIZE_USD * mult, room)
     if action in ("ENTRY_BUY", "ENTRY_SELL") and size_usd > balance.get("cash_usd", 0):
         size_usd = balance.get("cash_usd", 0) * 0.98
     if size_usd < 10:

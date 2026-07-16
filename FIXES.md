@@ -95,3 +95,65 @@ introduced by the fixes). All now fixed; test suite is 40/40.
 Remaining low/informational items (orphaned meta keys self-heal; `unknown` order
 outcomes could be logged for reconciliation) are noted for a future pass and do
 not affect paper-mode correctness.
+
+---
+
+# Round 3 — v6 Live Review Fixes (v7)
+
+A third independent review of MiniSim-v6 (after 7 days of live paper trading)
+executed the suspect code paths rather than reading them, and found that the
+headline v6 features were inert at runtime. All fixed in v7; every fix has a
+regression test (V7-1 … V7-12).
+
+## Critical wiring (silently swallowed exceptions)
+- **Router dead.** `chat_json()` had no `schema` parameter; the router's call
+  raised `TypeError` every hour and fell back to RangeScalp @ risk 0.5 — the
+  multi-strategy system never ran. `chat_json` now accepts `schema=`, and the
+  JSON prompt guard is derived from the caller's keys (the fixed guard also
+  contradicted strategy prompts asking for an `action` key).
+- **Per-strategy exits dead.** `update_meta()` rejected the `strat_*` kwargs
+  main.py passed after every entry, so exit_manager always used config
+  defaults and ATR-widened stops never applied. The tool now takes an
+  `extra=` dict and `positions()` merges all meta keys onto the position.
+- **Shorts could never be covered by a bullish flip.** `"COVER"` was missing
+  from `validators.ACTIONS`, so the flip crashed before placing the order.
+- **OversoldBounce crashed when not oversold** (invalid f-string format spec).
+- **`get_taker_ratio` missing from the in-process fallback map** — with MCP
+  transport down, every coin's analysis raised `KeyError`.
+
+## Feedback & accounting
+- Ledger entries carry the opening strategy; FIFO matching attributes closed
+  P&L (longs and shorts) to strategies — the router's performance block was
+  reading a `pnl_usd` field nothing ever wrote. Short exits were also
+  mis-ledgered as `SELL`, hiding them from all stats. The router's
+  `risk_level` is now applied to position sizing (clamped 0.5–2.0×).
+- DipBuy's "MACD hist improving" reduced to `hist > 0`; now compares to the
+  previous bar. StochRSI now O(n). The CEO inference is skipped when regime
+  or quiet hours make an entry impossible.
+
+## Safety & honesty
+- Exits and paper fills use a fresh ≤20s mark price (`get_price`) instead of
+  the 10-minute candle-cache vintage — the 30s exit loop was a 10-minute
+  stop in practice. The kill switch now blocks entries only; protective
+  exits keep running instead of abandoning open positions.
+- Entries are vetoed when market data is `synthetic(fallback)` in any real
+  mode. Canned fixture headlines (permanently bullish) are no longer served
+  outside fixture mode; sentiment abstains when there is no real news.
+- Paper fills charge a 0.1% taker fee + 2 bps slippage (the simulator was
+  frictionless). The duplicated paper-short path was merged into one.
+- Live/testnet orders round to the exchange's LOT_SIZE step before
+  submission; `unknown` order outcomes are appended to
+  `data/reconciliation.jsonl` for manual reconciliation.
+
+## Still honest about limits
+- ccxt order flow (precision, min-notional, stop orders) remains unverified
+  against the real testnet — verify there before any live use.
+- Exchange-native stop-loss orders as a backstop for software exits are
+  still TODO; a process crash leaves positions protected only by restart.
+- The `FUTURES_BACKEND = "hyperliquid"` adapter (added for UK users who
+  cannot obtain Binance futures keys) is flag-gated, defaults to binance,
+  and is UNVERIFIED against the venue — run its testnet first. Client order
+  ids are Binance-only (Hyperliquid cloids require 16-byte hex).
+- Synthetic-short funding accrual uses the latest rate pro-rata rather than
+  discrete 8h settlement snapshots — close enough for paper, not an
+  exchange-accurate reconciliation.

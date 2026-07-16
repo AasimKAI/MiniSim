@@ -60,21 +60,24 @@ def _match_trades(fills):
 
         if side == "BUY":
             buy_queues.setdefault(coin, deque()).append(
-                {"price": price, "qty": qty, "ts": ts})
+                {"price": price, "qty": qty, "ts": ts,
+                 "strategy": f.get("strategy")})
 
         elif side == "SHORT":
             short_queues.setdefault(coin, deque()).append(
-                {"price": price, "qty": qty, "ts": ts})
+                {"price": price, "qty": qty, "ts": ts,
+                 "strategy": f.get("strategy")})
 
         elif side == "SELL" and buy_queues.get(coin):
             remaining = qty
-            total_cost = 0.0; total_qty = 0.0; open_ts = ""
+            total_cost = 0.0; total_qty = 0.0; open_ts = ""; strat = None
             while remaining > 1e-9 and buy_queues[coin]:
                 buy = buy_queues[coin][0]
                 take = min(remaining, buy["qty"])
                 total_cost += buy["price"] * take
                 total_qty += take
                 open_ts = open_ts or buy["ts"]
+                strat = strat or buy.get("strategy")
                 buy["qty"] -= take; remaining -= take
                 if buy["qty"] <= 1e-9:
                     buy_queues[coin].popleft()
@@ -85,17 +88,19 @@ def _match_trades(fills):
                                 "open_price": round(avg_buy, 6), "close_price": price,
                                 "buy_price": round(avg_buy, 6), "sell_price": price,  # compat
                                 "pnl_pct": round(pnl_pct, 2), "qty": round(total_qty, 8),
+                                "strategy": strat,
                                 "buy_ts": open_ts, "sell_ts": ts})
 
         elif side == "COVER" and short_queues.get(coin):
             remaining = qty
-            total_proceeds = 0.0; total_qty = 0.0; open_ts = ""
+            total_proceeds = 0.0; total_qty = 0.0; open_ts = ""; strat = None
             while remaining > 1e-9 and short_queues[coin]:
                 short = short_queues[coin][0]
                 take = min(remaining, short["qty"])
                 total_proceeds += short["price"] * take
                 total_qty += take
                 open_ts = open_ts or short["ts"]
+                strat = strat or short.get("strategy")
                 short["qty"] -= take; remaining -= take
                 if short["qty"] <= 1e-9:
                     short_queues[coin].popleft()
@@ -106,6 +111,7 @@ def _match_trades(fills):
                                 "open_price": round(avg_short, 6), "close_price": price,
                                 "buy_price": round(avg_short, 6), "sell_price": price,  # compat
                                 "pnl_pct": round(pnl_pct, 2), "qty": round(total_qty, 8),
+                                "strategy": strat,
                                 "buy_ts": open_ts, "sell_ts": ts})
     return closed
 

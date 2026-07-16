@@ -1,5 +1,5 @@
 """
-MiniSim v5 — system orchestrator.
+MiniSim — system orchestrator.
 
 One think-cycle per coin:
   MCP feeds -> analysts -> regime -> strategy signals -> CEO decision -> risk -> execute -> log
@@ -29,6 +29,7 @@ from operations import kill_switch, status_writer
 from strategies import REGISTRY
 from strategies.router import (
     get_active_strategies,
+    get_risk_level,
     refresh_if_stale  as router_refresh,
     current_state_summary as router_summary,
 )
@@ -79,6 +80,16 @@ def analyse_coin(mcp, coin, active_strategies=None, macro=None):
     ob           = mcp.orderbook(coin)
     taker_ratio  = mcp.taker_ratio(coin)
     price        = ticker["price"]
+
+    # Never trade on synthetic fallback data outside fixture mode. The source
+    # is labelled on the dashboard, but labelling alone doesn't stop entries.
+    src = str(ticker.get("source", "unknown"))
+    if config.MODE != "fixture" and src.startswith("synthetic"):
+        decision = {"coin": coin, "action": "STAND_DOWN", "confidence": 0.0,
+                    "direction": "neutral", "regime": "unknown", "strategy": None,
+                    "ceo_backend": None,
+                    "reasoning": f"data_source_veto({src}) — market data is not real"}
+        return decision, price, [], "unknown", candles
 
     verdicts = [
         tech.analyze(coin, candles),
@@ -183,6 +194,16 @@ def run_cycle(mcp):
             ),
         }
         log.info("Macro: %s", macro["context_str"])
+
+        # Settle perp-style funding on any synthetic (paper-wallet) shorts.
+        # Real futures positions handle funding on the exchange.
+        try:
+            acc = mcp.accrue_funding(funding)
+            if acc and acc.get("shorts"):
+                log.info("Funding settled on %s synthetic short(s): $%+.4f",
+                         acc["shorts"], acc["accrued"])
+        except Exception as _fe:
+            log.debug("funding accrual skipped: %s", _fe)
     except Exception as e:
         log.debug("Macro fetch skipped: %s", e)
 
@@ -232,7 +253,9 @@ def run_cycle(mcp):
                     tax_ledger.record_trade(
                         coin, "COVER",
                         cover_fill.get("quantity", short["quantity"]),
-                        cover_fill.get("price", price))
+                        cover_fill.get("price", price),
+                        fee_usd=cover_fill.get("fee_usd", 0.0),
+                        strategy=short.get("strat_name"))
                 continue   # long entry on the next cycle once short is cleared
 
             if decision["action"] == "ENTRY_SELL" and has_short:
@@ -248,7 +271,8 @@ def run_cycle(mcp):
                 order_side = "SHORT"   # open synthetic short
 
             qty, verdict, why = risk_manager.check(
-                coin, decision["action"], price, bal, pos)
+                coin, decision["action"], price, bal, pos,
+                risk_mult=get_risk_level())
             if qty <= 0:
                 log.info("  risk veto: %s", why)
                 continue
@@ -266,7 +290,8 @@ def run_cycle(mcp):
             if fill.get("status") == "filled":
                 tax_ledger.record_trade(
                     coin, order_side,
-                    fill.get("quantity", qty), fill.get("price", price))
+                    fill.get("quantity", qty), fill.get("price", price),
+                    fee_usd=fill.get("fee_usd", 0.0), strategy=chosen_strategy)
 
                 # Store strategy exit params on the position so exit_manager can use them
                 if chosen_strategy and order_side in ("BUY", "SHORT"):
@@ -279,7 +304,7 @@ def run_cycle(mcp):
                         atr_pct = (atr_val / price * 100) if (atr_val and price) else None
                         if atr_pct:
                             log.debug("  ATR=%.4f%% of price", atr_pct)
-                        mcp.update_meta(coin, **_strat_meta(chosen_strategy, atr_pct))
+                        mcp.update_meta(coin, extra=_strat_meta(chosen_strategy, atr_pct))
                         log.info("  strategy params stored on position: %s", chosen_strategy)
                     except Exception as e:
                         log.warning("  could not store strategy meta: %s", e)
@@ -301,8 +326,9 @@ def run_cycle(mcp):
 
 
 def run_exits(mcp):
-    if kill_switch.is_active():
-        return
+    # Protective exits ALWAYS run — the kill switch blocks new entries only.
+    # Halting stop-loss/TP management would abandon open positions, which is
+    # worse than any state the kill switch is trying to prevent.
     for p in mcp.positions():
         coin  = p["coin"]
         price = p["current_price"]
@@ -314,9 +340,6 @@ def run_exits(mcp):
             pass
         if not should:
             continue
-        if kill_switch.is_active():
-            log.warning("kill switch tripped — aborting exit orders")
-            break
         lvl  = meta.get("target_level")
         qty  = round(p["quantity"] * frac, 6)
         if frac < 1.0 and qty * price < config.MIN_ORDER_NOTIONAL_USD:
@@ -331,8 +354,10 @@ def run_exits(mcp):
         if fill.get("status") == "filled":
             if lvl is not None:
                 mcp.update_meta(coin, add_target=lvl)
-            tax_ledger.record_trade(coin, "SELL",
-                                    fill.get("quantity", qty), fill.get("price", price))
+            tax_ledger.record_trade(coin, exit_side,
+                                    fill.get("quantity", qty), fill.get("price", price),
+                                    fee_usd=fill.get("fee_usd", 0.0),
+                                    strategy=p.get("strat_name"))
         else:
             log.warning("EXIT %s not filled (%s) — will retry next pass",
                         coin, fill.get("status"))
