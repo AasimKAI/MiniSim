@@ -50,6 +50,11 @@ If a dashboard ever says *offline*, the engine isn't running — double-click
 ---
 
 ## When you're ready to use the real test exchange (still fake money)
+
+Full details of every account type (spot testnet, futures testnet for shorts,
+Hyperliquid, live) and key-safety rules are in **[ACCOUNTS.md](ACCOUNTS.md)**.
+The short version for longs-only testnet:
+
 1. Make a free account at https://testnet.binance.vision and create API keys.
 2. Copy the secrets template and paste your keys in:
    ```

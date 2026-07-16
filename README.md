@@ -4,6 +4,10 @@ Automated cryptocurrency trading-signal system built to run on a **Raspberry Pi 
 (16GB RAM / NVMe SSD)**. Paper trading by default — no real money is touched until
 you explicitly change one line in `config.py` and supply Binance credentials.
 
+> **Accounts & API keys:** paper mode needs none. For testnet/live/Hyperliquid,
+> see **[ACCOUNTS.md](ACCOUNTS.md)** — which accounts to create and where the
+> login details go (`config/secrets.py`, never committed).
+
 ---
 
 ## What it does
