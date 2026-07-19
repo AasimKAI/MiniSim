@@ -15,7 +15,8 @@ and exactly where to save the keys. **Start here before touching `testnet` or
 | `testnet` longs (fake money, real exchange) | Binance **Spot testnet** | `BINANCE_TESTNET_API_KEY` / `_SECRET` |
 | `testnet` real shorts | Binance **Futures testnet** (separate signup) | `BINANCE_FUTURES_TESTNET_API_KEY` / `_SECRET` |
 | Shorts via Hyperliquid (`FUTURES_BACKEND="hyperliquid"`) | A crypto wallet + HL API wallet | `HYPERLIQUID_WALLET_ADDRESS` / `_PRIVATE_KEY` |
-| `live` (real money — read the warnings) | Binance account with API keys | `BINANCE_LIVE_API_KEY` / `_SECRET` (+ futures fields if eligible) |
+| `live` via Binance (non-UK) | Binance account with API keys | `BINANCE_LIVE_API_KEY` / `_SECRET` |
+| `live` via Kraken **(UK recommended)** | Kraken account with API keys | `KRAKEN_API_KEY` / `_SECRET` |
 
 Things you do **not** need an account for: market prices (Binance public API /
 CoinGecko), news headlines (free RSS), Fear & Greed, funding rates, VIX/DXY
@@ -98,7 +99,7 @@ the Hyperliquid *testnet* first and watch `data/reconciliation.jsonl`.
 Mainnet perp venues generally restrict UK retail users — check the venue's
 terms yourself before any real-money use.
 
-## Account 4 — Binance live (real money)
+## Account 4 — Binance live (real money, non-UK)
 
 Only after weeks of testnet behaviour you trust. Create API keys at
 binance.com → API Management, then fill `BINANCE_LIVE_API_KEY` / `_SECRET`
@@ -113,6 +114,43 @@ not available to UK retail).
 - ✅ **Restrict the key to your Pi's IP address** (router/static IP or VPN IP).
 - ✅ Use a fresh key for MiniSim — don't reuse keys from other tools.
 - 🔁 If a key may have leaked, delete it on Binance immediately and reissue.
+
+## Account 5 — Kraken live (real money, UK recommended)
+
+Kraken is FCA-registered and fully available to UK retail. **No testnet** —
+validate with paper mode first, then go live.
+
+1. Create an account at **https://kraken.com** and complete KYC (passport or
+   driving licence; takes 1–2 days).
+2. Fund your account with USDT (not USD — MiniSim trades USDT pairs).
+3. Go to **Security → API → Create API Key**. Set these permissions:
+   - ✅ **Query Funds**
+   - ✅ **Create & Modify Orders**
+   - ✅ **Query Open Orders & Trades**
+   - ❌ Everything else (especially Withdraw Funds)
+4. Paste the key and secret into `config/secrets.py`:
+   ```
+   KRAKEN_API_KEY    = "your-key-here"
+   KRAKEN_API_SECRET = "your-secret-here"
+   ```
+5. Set the spot backend in the systemd service. Edit
+   `/etc/systemd/system/minisim.service` and add:
+   ```
+   Environment=MINISIM_LIVE_SPOT_BACKEND=kraken
+   Environment=MINISIM_MODE=live
+   ```
+   Then reload: `sudo systemctl daemon-reload && sudo systemctl restart minisim`
+
+**Notes:**
+- BNB is not listed on Kraken. If BNB is in `TRACKED_COINS`, the system will
+  simply skip it when placing real orders (the error is caught and logged).
+  Remove BNB from `TRACKED_COINS` in `config/config.py` to avoid wasted
+  analysis cycles.
+- Kraken has no IP-restriction feature on API keys. Keep the key short-lived
+  and rotate it every 90 days.
+- For shorts, set `FUTURES_BACKEND=hyperliquid` — Kraken Futures is a separate
+  platform not yet supported. Paper shorts remain the default if no futures
+  credentials are present.
 
 ## Listed but optional / not required today
 

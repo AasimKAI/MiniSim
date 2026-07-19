@@ -297,6 +297,12 @@ def _paper_fill(coin, side, quantity, client_order_id=None):
 
 # ---------- ccxt clients (cached, one per exchange type per process) ----------
 
+def _is_kraken():
+    """True when live mode is configured to use Kraken for spot orders."""
+    return (config.MODE == "live" and
+            getattr(config, "LIVE_SPOT_BACKEND", "binance") == "kraken")
+
+
 def _futures_available():
     """True if futures credentials are configured for the current mode/backend."""
     from config import secrets
@@ -331,16 +337,23 @@ def _ccxt_client():
             return _spot_ex_cache
         import ccxt
         from config import secrets
-        key = (secrets.BINANCE_TESTNET_API_KEY if config.MODE == "testnet"
-               else secrets.BINANCE_LIVE_API_KEY)
-        sec = (secrets.BINANCE_TESTNET_API_SECRET if config.MODE == "testnet"
-               else secrets.BINANCE_LIVE_API_SECRET)
-        if not key:
-            raise RuntimeError("no spot exchange credentials configured")
-        ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
-                           "options": {"defaultType": "spot"}})
-        if config.MODE == "testnet":
-            ex.set_sandbox_mode(True)
+        if _is_kraken():
+            key = getattr(secrets, "KRAKEN_API_KEY", "")
+            sec = getattr(secrets, "KRAKEN_API_SECRET", "")
+            if not key:
+                raise RuntimeError("no Kraken credentials configured — set KRAKEN_API_KEY in secrets.py")
+            ex = ccxt.kraken({"apiKey": key, "secret": sec, "enableRateLimit": True})
+        else:
+            key = (secrets.BINANCE_TESTNET_API_KEY if config.MODE == "testnet"
+                   else secrets.BINANCE_LIVE_API_KEY)
+            sec = (secrets.BINANCE_TESTNET_API_SECRET if config.MODE == "testnet"
+                   else secrets.BINANCE_LIVE_API_SECRET)
+            if not key:
+                raise RuntimeError("no spot exchange credentials configured")
+            ex = ccxt.binance({"apiKey": key, "secret": sec, "enableRateLimit": True,
+                               "options": {"defaultType": "spot"}})
+            if config.MODE == "testnet":
+                ex.set_sandbox_mode(True)
         _spot_ex_cache = ex
     return _spot_ex_cache
 
@@ -525,7 +538,9 @@ def _ccxt_order(coin, side, quantity, coid):
         if quantity <= 0:
             return {"status": "rejected",
                     "reason": "quantity below exchange LOT_SIZE precision"}
-        params = {"newClientOrderId": coid} if coid else {}
+        # Kraken uses a 32-bit integer userref — our UUID coids are incompatible.
+        # Idempotency on Kraken relies on the local fill log instead.
+        params = {} if _is_kraken() else ({"newClientOrderId": coid} if coid else {})
         order = ex.create_order(symbol, "market", side.lower(), quantity, params=params)
         px     = order.get("average") or order.get("price")
         filled = order.get("filled") or quantity

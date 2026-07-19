@@ -8,6 +8,12 @@ BINANCE_TESTNET_API_SECRET = ""
 BINANCE_LIVE_API_KEY = ""
 BINANCE_LIVE_API_SECRET = ""
 
+# KRAKEN LIVE - FCA-registered UK alternative to Binance spot.
+# Set MINISIM_LIVE_SPOT_BACKEND=kraken in the systemd service to activate.
+# No testnet — use paper mode for validation before going live.
+KRAKEN_API_KEY = ""
+KRAKEN_API_SECRET = ""
+
 # Futures (real shorts). Binance futures TESTNET is a separate registration
 # from spot testnet: https://testnet.binancefuture.com (email-only signup).
 BINANCE_FUTURES_TESTNET_API_KEY = ""

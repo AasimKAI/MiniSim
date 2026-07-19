@@ -78,6 +78,12 @@ PAPER_SLIPPAGE_BPS = 2.0         # 2 bps adverse price move per market order
 FUTURES_LEVERAGE    = 1            # 1x = no leverage; increase only deliberately
 FUTURES_MARGIN_TYPE = "ISOLATED"   # ISOLATED is safer than CROSS for automated trading
 
+# Which spot exchange executes real BUY/SELL orders in live mode.
+#   binance -> Binance spot (not available to UK retail)
+#   kraken  -> Kraken spot (FCA-registered, UK-legal)
+# Has no effect in testnet mode (always Binance testnet) or paper/fixture.
+LIVE_SPOT_BACKEND = os.environ.get("MINISIM_LIVE_SPOT_BACKEND", "binance")
+
 # Which venue executes real SHORT/COVER orders when futures credentials exist.
 #   binance     -> USDM perps (UK retail accounts cannot obtain futures keys)
 #   hyperliquid -> perp DEX via ccxt, USDC-settled, has a public testnet.
